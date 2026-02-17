@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 from . import models, schemas, crud, database, security
 
-# Crea las tablas (ahora creará 'products' y 'users')
+# Creo las tablas (ahora creará 'products' y 'users')
 # models.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI()
@@ -18,24 +18,64 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- SEGURIDAD ---
+# --- SEGURIDAD Y DEPENDENCIAS ---
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
+# Función auxiliar: Obtiene el usuario actual desde el token
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(database.get_db)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="No se pudieron validar las credenciales",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        # Decodificamos el token
+        payload = jwt.decode(token, security.SECRET_KEY, algorithms=[security.ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    
+    # Buscamos al usuario en la DB
+    user = db.query(models.User).filter(models.User.username == username).first()
+    if user is None:
+        raise credentials_exception
+    return user
+
+# Función auxiliar: Solo deja pasar si el rol es 'admin'
+def get_current_admin(current_user: models.User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requieren permisos de Administrador"
+        )
+    return current_user
+
+# --- LOGIN (Token) ---
 @app.post("/token")
-def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    if form_data.password != "admin":
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(database.get_db)):
+    user = db.query(models.User).filter(models.User.username == form_data.username).first()
+    if not user or user.hashed_password != form_data.password:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Contraseña incorrecta",
+            detail="Usuario o contraseña incorrectos",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    access_token = security.create_access_token(data={"sub": form_data.username})
-    return {"access_token": access_token, "token_type": "bearer"}
+    access_token = security.create_access_token(data={"sub": user.username})
+    
+    # Devolvemos también el rol y el usuario
+    return {
+        "access_token": access_token, 
+        "token_type": "bearer",
+        "username": user.username,
+        "role": user.role
+    }
 
 # --- RUTA PROTEGIDA DE PRUEBA ---
 @app.get("/users/me")
-def read_users_me(token: str = Depends(oauth2_scheme)):
-    return {"mensaje": "¡Has entrado en la zona segura!", "token_actual": token}
+def read_users_me(current_user: models.User = Depends(get_current_user)):
+    return {"mensaje": "¡Has entrado en la zona segura!", "usuario": current_user.username, "rol": current_user.role}
 
 # --- NUEVOS ENDPOINTS: PRODUCTOS (INVENTARIO) ---
 
@@ -43,13 +83,40 @@ def read_users_me(token: str = Depends(oauth2_scheme)):
 def create_product(
     product: schemas.ProductCreate, 
     db: Session = Depends(database.get_db),
-    token: str = Depends(oauth2_scheme) # CANDADO: Solo logueados
+    # CANDADO DE ORO: Ahora exigimos ser admin usando la nueva función
+    current_user: models.User = Depends(get_current_admin) 
 ):
     # Validar si ya existe el SKU
     db_product = crud.get_product_by_sku(db, sku=product.sku)
     if db_product:
         raise HTTPException(status_code=400, detail="El producto con ese SKU ya existe")
     return crud.create_product(db=db, product=product)
+
+# BORRAR PRODUCTO (Solo Admin)
+@app.delete("/products/{product_id}")
+def delete_product(
+    product_id: int, 
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_admin) # <--- Solo admin
+):
+    product = crud.get_product(db, product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+    crud.delete_product(db, product_id)
+    return {"detail": "Producto eliminado"}
+
+# ACTUALIZAR PRODUCTO (Solo Admin)
+@app.put("/products/{product_id}", response_model=schemas.Product)
+def update_product(
+    product_id: int,
+    product_data: schemas.ProductCreate,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_admin) # <--- Solo admin
+):
+    product = crud.get_product(db, product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+    return crud.update_product(db, product_id, product_data)
 
 @app.get("/products/", response_model=list[schemas.Product])
 def read_products(skip: int = 0, limit: int = 100, db: Session = Depends(database.get_db)):
@@ -69,44 +136,19 @@ def read_product(product_id: int, db: Session = Depends(database.get_db)):
 def create_order(
     order: schemas.OrderCreate, 
     db: Session = Depends(database.get_db),
-    token: str = Depends(oauth2_scheme)
+    # Usamos la dependencia estándar (cualquier usuario registrado puede comprar)
+    current_user: models.User = Depends(get_current_user)
 ):
-    try:
-        payload = jwt.decode(token, security.SECRET_KEY, algorithms=[security.ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            raise HTTPException(status_code=401, detail="Token inválido")
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Token inválido")
-    
-    # Buscamos al usuario en la DB
-    user = db.query(models.User).filter(models.User.username == username).first()
-    if not user:
-         raise HTTPException(status_code=404, detail="Usuario no encontrado")
-
-    # 2. Creamos el pedido
-    return crud.create_order(db=db, order=order, user_id=user.id)
+    # Creamos el pedido usando el ID del usuario que viene del token
+    return crud.create_order(db=db, order=order, user_id=current_user.id)
 
 @app.get("/orders/my-orders", response_model=list[schemas.OrderResponse])
 def read_my_orders(
     db: Session = Depends(database.get_db),
-    token: str = Depends(oauth2_scheme)
+    current_user: models.User = Depends(get_current_user)
 ):
-    try:
-        payload = jwt.decode(token, security.SECRET_KEY, algorithms=[security.ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            raise HTTPException(status_code=401, detail="Token inválido")
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Token inválido")
-    
-    # --- BUSCAR AL USUARIO EN LA DB ---
-    user = db.query(models.User).filter(models.User.username == username).first()
-    if not user:
-         raise HTTPException(status_code=404, detail="Usuario no encontrado")
-    
-    # Ahora sí, 'user' existe y podemos usar user.id
-    return crud.get_orders_by_user(db, user_id=user.id)
+    # Usamos directamente el usuario recuperado por la dependencia
+    return crud.get_orders_by_user(db, user_id=current_user.id)
 
 # Endpoint para crear un usuario de prueba en la base de datos
 @app.post("/register", response_model=schemas.User)

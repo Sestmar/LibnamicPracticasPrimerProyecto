@@ -9,6 +9,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True)
     email = Column(String, unique=True, index=True)
+    role = Column(String, default="user")
     hashed_password = Column(String)
     is_active = Column(Boolean, default=True)
     orders = relationship("Order", back_populates="owner")
@@ -46,7 +47,7 @@ class OrderItem(Base):
     product_id = Column(Integer, ForeignKey("products.id"))
     
     quantity = Column(Integer, default=1)
-    unit_price = Column(Float) # Guardamos el precio al momento de la compra
+    unit_price = Column(Float) # Guardo el precio al momento de la compra
 
     # Relaciones
     order = relationship("Order", back_populates="items")

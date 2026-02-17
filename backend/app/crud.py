@@ -71,3 +71,23 @@ def create_order(db: Session, order: schemas.OrderCreate, user_id: int):
 
 def get_orders_by_user(db: Session, user_id: int):
     return db.query(models.Order).filter(models.Order.user_id == user_id).all()
+
+def delete_product(db: Session, product_id: int):
+    product = db.query(models.Product).filter(models.Product.id == product_id).first()
+    if product:
+        db.delete(product)
+        db.commit()
+    return product
+
+def update_product(db: Session, product_id: int, product_data: schemas.ProductCreate):
+    product = db.query(models.Product).filter(models.Product.id == product_id).first()
+    if product:
+        # Actualizamos campo a campo
+        product.name = product_data.name
+        product.sku = product_data.sku
+        product.description = product_data.description
+        product.price = product_data.price
+        product.stock = product_data.stock
+        db.commit()
+        db.refresh(product)
+    return product

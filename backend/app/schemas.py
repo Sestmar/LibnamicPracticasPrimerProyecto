@@ -22,6 +22,7 @@ class Product(ProductBase):
 class UserBase(BaseModel):
     username: str
     email: str
+    role: str = "user"
 
 class UserCreate(UserBase):
     password: str
@@ -29,7 +30,7 @@ class UserCreate(UserBase):
 class User(UserBase):
     id: int
     is_active: bool
-    
+
     class Config:
         from_attributes = True
 

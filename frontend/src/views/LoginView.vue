@@ -26,7 +26,13 @@ const login = async () => {
     if (!response.ok) throw new Error('Credenciales incorrectas')
 
     const data = await response.json()
+    
+    // Guardo el token Y el rol y el usuario
     localStorage.setItem('token', data.access_token)
+    localStorage.setItem('role', data.role)      
+    localStorage.setItem('username', data.username)
+    // -------------------------
+
     router.push('/products')
     
   } catch (e) {
