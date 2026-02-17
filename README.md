@@ -1,4 +1,4 @@
-# 📦 Sistema de Gestión de Inventario y Pedidos
+# Sistema de Gestión de Inventario y Pedidos
 
 ![Python](https://img.shields.io/badge/Python-3.11-blue?style=for-the-badge&logo=python)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.109-009688?style=for-the-badge&logo=fastapi)
