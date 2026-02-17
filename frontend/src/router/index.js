@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-// Importamos las vistas directamente para evitar problemas de carga
+// Importo las vistas directamente para evitar problemas de carga
 import LoginView from '../views/LoginView.vue'
 import ProductsView from '../views/ProductsView.vue'
 import MyOrdersView from '../views/MyOrdersView.vue'
@@ -25,7 +25,7 @@ const router = createRouter({
       component: ProductsView
     },
     {
-      path: '/my-orders', // <--- Ruta nueva
+      path: '/my-orders',
       name: 'my-orders',
       component: MyOrdersView
     }

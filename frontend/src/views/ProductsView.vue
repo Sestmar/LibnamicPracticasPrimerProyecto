@@ -33,7 +33,7 @@ const buyProduct = async (productId) => {
     })
 
     if (response.ok) {
-      // Feedback visual más sutil que un alert (podríamos mejorarlo luego)
+      // Feedback visual
       alert('✅ Pedido realizado')
       fetchProducts()
     } else {
@@ -79,7 +79,7 @@ onMounted(fetchProducts)
       </header>
 
       <div v-if="error" class="error-banner">
-        ⚠️ {{ error }}
+         {{ error }}
       </div>
 
       <div v-else class="product-grid">

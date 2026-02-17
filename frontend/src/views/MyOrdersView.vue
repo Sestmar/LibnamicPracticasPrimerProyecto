@@ -11,7 +11,7 @@ if (!token) { router.push('/login') }
 
 const fetchOrders = async () => {
   try {
-    // Llamamos al endpoint que ya creaste y probaste en Swagger
+    // Llamo al endpoint
     const response = await fetch('http://localhost:8000/orders/my-orders', {
       headers: {
         'Authorization': `Bearer ${token}`
@@ -20,9 +20,9 @@ const fetchOrders = async () => {
     
     if (!response.ok) throw new Error('Error al cargar pedidos')
     
-    // Guardamos la lista de pedidos
+    // Guardp la lista de pedidos
     orders.value = await response.json()
-    // Invertimos el orden para ver los más nuevos primero
+    // Invierto el orden para ver los más nuevos primero
     orders.value.reverse()
     
   } catch (e) {

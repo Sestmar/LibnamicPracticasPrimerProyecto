@@ -26,33 +26,33 @@ def create_product(db: Session, product: schemas.ProductCreate):
     return db_product
 
 def create_order(db: Session, order: schemas.OrderCreate, user_id: int):
-    # 1. Crear la cabecera del pedido (aún precio 0)
+    # 1. Creo la cabecera del pedido (aún precio 0)
     db_order = models.Order(user_id=user_id, status="completado", total_price=0.0)
     db.add(db_order)
-    db.commit()      # Guardamos para obtener el ID del pedido
+    db.commit()      # Guardp para obtener el ID del pedido
     db.refresh(db_order)
 
     total_amount = 0.0
 
-    # 2. Procesar cada item
+    # 2. Procesp cada item
     for item in order.items:
         # Buscamos el producto
         product = get_product(db, item.product_id)
         if not product:
             raise HTTPException(status_code=404, detail=f"Producto {item.product_id} no encontrado")
         
-        # VERIFICAR STOCK (Lógica de Negocio Real)
+        # VERIFICO STOCK
         if product.stock < item.quantity:
             raise HTTPException(status_code=400, detail=f"Stock insuficiente para {product.name}")
 
-        # RESTAR STOCK
+        # RESTO STOCK
         product.stock -= item.quantity
         
-        # Calcular precio del item
+        # Calculo precio del item
         cost = product.price * item.quantity
         total_amount += cost
 
-        # Crear el OrderItem
+        # Creo el OrderItem
         db_item = models.OrderItem(
             order_id=db_order.id,
             product_id=product.id,
@@ -61,10 +61,10 @@ def create_order(db: Session, order: schemas.OrderCreate, user_id: int):
         )
         db.add(db_item)
 
-    # 3. Actualizar el precio total del pedido
+    # 3. Actualizo el precio total del pedido
     db_order.total_price = total_amount
-    db.add(db_order) # Marcamos para actualizar
-    db.commit()      # Confirmamos toda la transacción (items + actualización de pedido + stock)
+    db.add(db_order) # Marco para actualizar
+    db.commit()      # Confirmo toda la transacción (items + actualización de pedido + stock)
     db.refresh(db_order)
     
     return db_order

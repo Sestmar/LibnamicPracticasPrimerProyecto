@@ -6,7 +6,7 @@ const username = ref('')
 const password = ref('')
 const router = useRouter()
 const error = ref('')
-const isLoading = ref(false) // Nuevo: estado de carga
+const isLoading = ref(false)
 
 const login = async () => {
   error.value = ''
@@ -70,7 +70,7 @@ const login = async () => {
         </div>
 
         <div v-if="error" class="error-message">
-          ⚠️ {{ error }}
+           {{ error }}
         </div>
 
         <button type="submit" class="submit-btn" :disabled="isLoading">

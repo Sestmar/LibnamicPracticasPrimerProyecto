@@ -18,7 +18,7 @@ class Product(ProductBase):
     class Config:
         from_attributes = True
 
-# --- USUARIOS (Para más adelante) ---
+# --- USUARIOS (No implementada aún) ---
 class UserBase(BaseModel):
     username: str
     email: str
@@ -49,8 +49,6 @@ class OrderItemResponse(BaseModel):
     product_id: int
     quantity: int
     unit_price: float
-    # Truco: Podemos anidar el nombre del producto si quisiéramos, 
-    # pero por ahora lo dejamos simple.
     
     class Config:
         from_attributes = True
