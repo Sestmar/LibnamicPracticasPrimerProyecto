@@ -290,13 +290,13 @@ onUnmounted(() => {
   color: var(--text-muted);
 }
 
-.room-item {
+.room-item{
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 14px 20px;
   cursor: pointer;
-  transition: background var(--transition-fast);
+  transition: background-color var(--transition-fast);
   border-bottom: 1px solid rgba(255, 255, 255, 0.03);
 }
 
@@ -509,7 +509,7 @@ onUnmounted(() => {
 .input-area {
   background: var(--bg-secondary);
   padding: 14px 24px;
-  border-top: 1px solid var(--border-color);L
+  border-top: 1px solid var(--border-color);
   display: flex;
   gap: 10px;
 }
