@@ -1,11 +1,16 @@
 import os
+from .websocket import chat_manager
+from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Response, WebSocket, WebSocketDisconnect
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 from . import models, schemas, crud, database, security
 import stripe
+import threading
+from .invoice import generate_invoice_pdf
+from .email_service import send_order_confirmation
 
 # Creo las tablas (ahora creará 'products' y 'users')
 # models.Base.metadata.create_all(bind=database.engine)
@@ -69,7 +74,11 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    access_token = security.create_access_token(data={"sub": user.email})
+    access_token = security.create_access_token(data={
+        "sub": user.email,
+        "role": user.role,
+        "full_name": f"{user.first_name} {user.last_name}"
+    })
     
     return {
         "access_token": access_token, 
@@ -191,7 +200,15 @@ def create_order(
     current_user: models.User = Depends(get_current_user)
 ):
     # Creamos el pedido usando el ID del usuario que viene del token
-    return crud.create_order(db=db, order=order, user_id=current_user.id)
+    new_order = crud.create_order(db=db, order=order, user_id=current_user.id)
+    
+    # Enviar email de confirmación en segundo plano (no bloquea la respuesta)
+    threading.Thread(
+        target=send_order_confirmation,
+        args=(current_user, new_order)
+    ).start()
+    
+    return new_order
 
 @app.get("/orders/my-orders", response_model=list[schemas.OrderResponse])
 def read_my_orders(
@@ -230,3 +247,95 @@ def change_order_status(
     current_user: models.User = Depends(get_current_admin)
 ):
     return crud.update_order_status(db, order_id, new_status=status)
+
+# Endpoint de estadísticas para el Dashboard BI
+@app.get("/admin/stats")
+def read_dashboard_stats(
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_admin)
+):
+    return crud.get_dashboard_stats(db)
+
+# Endpoint para descargar la factura en PDF
+@app.get("/orders/{order_id}/invoice")
+def download_invoice(
+    order_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    # Buscamos el pedido con sus items
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    
+    # Solo el dueño del pedido o un admin pueden descargar la factura
+    if order.user_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="No tienes permisos para ver esta factura")
+    
+    # Obtenemos al usuario dueño del pedido (puede ser distinto al admin)
+    owner = db.query(models.User).filter(models.User.id == order.user_id).first()
+    
+    pdf_bytes = generate_invoice_pdf(order, owner)
+    
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=factura_{order_id}.pdf"}
+    )
+
+# --- CHAT EN TIEMPO REAL (WebSockets) ---
+
+@app.websocket("/ws/chat/{room_id}")
+async def websocket_chat(websocket: WebSocket, room_id: str):
+    # Autenticación via query param: ws://host/ws/chat/room?token=xxx
+    token_param = websocket.query_params.get("token", "")
+    try:
+        payload = jwt.decode(token_param, security.SECRET_KEY, algorithms=[security.ALGORITHM])
+        user_email = payload.get("sub")
+        user_role = payload.get("role", "user")
+        user_name = payload.get("full_name", user_email)
+    except JWTError:
+        await websocket.close(code=4001)
+        return
+
+    # CLAVE: Para clientes, el room_id SIEMPRE es su email (privado)
+    # Para admins, usan el room_id de la URL (la sala que seleccionaron)
+    if user_role != "admin":
+        actual_room_id = user_email  # Forzar sala privada por email
+    else:
+        actual_room_id = room_id     # Admin se une a la sala seleccionada
+
+    print(f"[CHAT] {user_name} ({user_role}) conectando a sala: {actual_room_id}")
+
+    room = chat_manager.get_or_create_room(actual_room_id, client_email=user_email if user_role != "admin" else "")
+    await room.connect(websocket)
+
+    # Notificar que alguien se unió (NO se guarda como mensaje)
+    await room.broadcast({
+        "type": "system",
+        "content": f"{user_name} se ha unido al chat",
+        "timestamp": datetime.utcnow().isoformat()
+    })
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+            message = {
+                "type": "message",
+                "sender": user_name,
+                "sender_role": user_role,
+                "content": data,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+            await room.broadcast(message)
+    except WebSocketDisconnect:
+        room.disconnect(websocket)
+        await room.broadcast({
+            "type": "system",
+            "content": f"{user_name} ha salido del chat",
+            "timestamp": datetime.utcnow().isoformat()
+        })
+
+@app.get("/admin/chat-rooms")
+def get_chat_rooms(current_user: models.User = Depends(get_current_admin)):
+    return chat_manager.get_active_rooms()

@@ -31,6 +31,7 @@ const login = async () => {
     localStorage.setItem('token', data.access_token)
     localStorage.setItem('role', data.role)
     localStorage.setItem('full_name', data.full_name)
+    localStorage.setItem('email', data.email)
     // -------------------------
 
     router.push('/products')

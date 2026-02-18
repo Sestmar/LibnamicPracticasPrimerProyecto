@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 const products = ref([])
@@ -13,6 +13,21 @@ const isEditing = ref(false)
 const editingId = ref(null)
 
 const newProduct = ref({ name: '', description: '', price: 0, stock: 0, sku: '' })
+
+// Estado del buscador predictivo
+const searchQuery = ref('')
+
+// Filtrado reactivo: se recalcula automáticamente al escribir
+const filteredProducts = computed(() => {
+  const query = searchQuery.value.toLowerCase().trim()
+  if (!query) return products.value
+
+  return products.value.filter(product => {
+    return product.name.toLowerCase().includes(query)
+      || product.sku.toLowerCase().includes(query)
+      || (product.description && product.description.toLowerCase().includes(query))
+  })
+})
 
 if (!token) router.push('/login')
 
@@ -164,6 +179,10 @@ onMounted(fetchProducts)
             🛒 Carrito
           </button>
 
+          <button @click="router.push('/chat')" class="nav-btn chat-nav-btn">
+            💬 Chat
+          </button>
+
           <button @click="logout" class="nav-btn danger">
             Salir
           </button>
@@ -175,6 +194,18 @@ onMounted(fetchProducts)
       <header class="page-header">
         <h1>Catálogo de Productos</h1>
         <p class="subtitle">Gestión de Inventario y Ventas</p>
+
+        <!-- Buscador predictivo -->
+        <div class="search-wrapper">
+          <span class="search-icon">🔍</span>
+          <input 
+            v-model="searchQuery" 
+            type="text" 
+            placeholder="Buscar por nombre, SKU o descripción..." 
+            class="search-input"
+          />
+          <span v-if="searchQuery" @click="searchQuery = ''" class="clear-btn">✕</span>
+        </div>
       </header>
 
       <div v-if="userRole === 'admin'" class="admin-panel">
@@ -219,8 +250,12 @@ onMounted(fetchProducts)
 
       <div v-if="error" class="error-banner">{{ error }}</div>
 
+      <div v-else-if="filteredProducts.length === 0" class="no-results">
+        <p>No se encontraron productos para "<strong>{{ searchQuery }}</strong>"</p>
+      </div>
+
       <div v-else class="product-grid">
-        <div v-for="product in products" :key="product.id" class="product-card">
+        <div v-for="product in filteredProducts" :key="product.id" class="product-card">
           <div class="card-image">
             
           </div>
@@ -275,6 +310,54 @@ onMounted(fetchProducts)
 .page-header { margin-bottom: 3rem; text-align: center; }
 .page-header h1 { font-size: 2.5rem; color: #1a202c; margin-bottom: 0.5rem; }
 .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 2rem; }
+
+/* BUSCADOR PREDICTIVO */
+.search-wrapper {
+  position: relative;
+  max-width: 500px;
+  margin: 1.5rem auto 0;
+}
+.search-icon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.1rem;
+  pointer-events: none;
+}
+.search-input {
+  width: 100%;
+  padding: 0.875rem 2.5rem 0.875rem 3rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 1rem;
+  background: white;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+}
+.search-input:focus {
+  border-color: #42b883;
+  box-shadow: 0 0 0 3px rgba(66, 184, 131, 0.15);
+  outline: none;
+}
+.search-input::placeholder { color: #a0aec0; }
+.clear-btn {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  color: #a0aec0;
+  font-size: 1.1rem;
+  transition: color 0.2s;
+}
+.clear-btn:hover { color: #e74c3c; }
+.no-results {
+  text-align: center;
+  padding: 3rem;
+  color: #718096;
+  font-size: 1.1rem;
+}
 
 /* PANEL ADMIN MEJORADO */
 .admin-panel {

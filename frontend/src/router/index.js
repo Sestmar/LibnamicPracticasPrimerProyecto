@@ -7,6 +7,7 @@ import CartView from '../views/CartView.vue'
 import AdminDashboardView from '../views/AdminDashboardView.vue'
 import RegisterView from '../views/RegisterView.vue'
 import PaymentView from '../views/PaymentView.vue'
+import ChatView from '../views/ChatView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -43,13 +44,19 @@ const router = createRouter({
       name: 'admin',
       component: AdminDashboardView
     },
-    { path: '/register', 
-      name: 'register', component: RegisterView 
+    {
+      path: '/register',
+      name: 'register', component: RegisterView
     },
     {
       path: '/payment',
       name: 'payment',
       component: PaymentView
+    },
+    {
+      path: '/chat',
+      name: 'chat',
+      component: ChatView
     }
   ]
 })

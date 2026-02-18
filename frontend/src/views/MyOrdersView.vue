@@ -37,6 +37,24 @@ const formatDate = (dateString) => {
 
 const goBack = () => router.push('/products')
 
+const downloadInvoice = async (orderId) => {
+  try {
+    const response = await fetch(`http://localhost:8000/orders/${orderId}/invoice`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    if (!response.ok) throw new Error('Error al descargar factura')
+    const blob = await response.blob()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `factura_${orderId}.pdf`
+    a.click()
+    window.URL.revokeObjectURL(url)
+  } catch (e) {
+    alert('❌ ' + e.message)
+  }
+}
+
 onMounted(fetchOrders)
 </script>
 
@@ -69,8 +87,9 @@ onMounted(fetchOrders)
           </div>
         </div>
 
-        <div class="order-total">
-          Total Pagado: <strong>{{ order.total_price.toFixed(2) }} €</strong>
+        <div class="order-footer">
+          <span class="order-total">Total Pagado: <strong>{{ order.total_price.toFixed(2) }} €</strong></span>
+          <button @click="downloadInvoice(order.id)" class="invoice-btn">📄 Descargar Factura</button>
         </div>
       </div>
     </div>
@@ -91,4 +110,8 @@ header { display: flex; justify-content: space-between; align-items: center; mar
 .item-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed #eee; }
 .order-total { padding: 15px; background: #fafafa; text-align: right; font-size: 1.1em; }
 .no-orders { text-align: center; padding: 40px; color: #999; font-size: 1.2em; }
+.order-footer { display: flex; justify-content: space-between; align-items: center; padding: 15px; background: #fafafa; border-top: 1px solid #eee; }
+.order-footer .order-total { padding: 0; background: none; }
+.invoice-btn { background: #3498db; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem; transition: background 0.2s; }
+.invoice-btn:hover { background: #2980b9; }
 </style>

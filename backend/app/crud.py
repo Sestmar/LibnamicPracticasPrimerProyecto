@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import func, extract
 from . import models, schemas
 from fastapi import HTTPException
 from app import security
@@ -140,3 +141,58 @@ def update_order_status(db: Session, order_id: int, new_status: str):
         db.commit()
         db.refresh(order)
     return order
+
+
+# --- ESTADÍSTICAS DEL DASHBOARD (BI) ---
+
+def get_dashboard_stats(db: Session):
+    # 1. Ingresos totales y número de pedidos
+    total_revenue = db.query(func.coalesce(func.sum(models.Order.total_price), 0)).scalar()
+    total_orders = db.query(func.count(models.Order.id)).scalar()
+    avg_ticket = round(total_revenue / total_orders, 2) if total_orders > 0 else 0
+
+    # 2. Ventas agrupadas por mes (últimos 6 meses)
+    monthly_sales = (
+        db.query(
+            extract('year', models.Order.created_at).label('year'),
+            extract('month', models.Order.created_at).label('month'),
+            func.sum(models.Order.total_price).label('revenue'),
+            func.count(models.Order.id).label('orders')
+        )
+        .group_by('year', 'month')
+        .order_by(extract('year', models.Order.created_at).desc(), extract('month', models.Order.created_at).desc())
+        .limit(6)
+        .all()
+    )
+
+    # Formateamos para el frontend (orden cronológico)
+    months_data = [
+        {"month": int(row.month), "year": int(row.year), "revenue": round(float(row.revenue), 2), "orders": int(row.orders)}
+        for row in reversed(monthly_sales)
+    ]
+
+    # 3. Top 5 productos más vendidos (por unidades)
+    top_products = (
+        db.query(
+            models.Product.name,
+            func.sum(models.OrderItem.quantity).label('units_sold')
+        )
+        .join(models.OrderItem, models.Product.id == models.OrderItem.product_id)
+        .group_by(models.Product.id, models.Product.name)
+        .order_by(func.sum(models.OrderItem.quantity).desc())
+        .limit(5)
+        .all()
+    )
+
+    top_products_data = [
+        {"name": row.name, "units_sold": int(row.units_sold)}
+        for row in top_products
+    ]
+
+    return {
+        "total_revenue": round(float(total_revenue), 2),
+        "total_orders": total_orders,
+        "avg_ticket": avg_ticket,
+        "monthly_sales": months_data,
+        "top_products": top_products_data
+    }

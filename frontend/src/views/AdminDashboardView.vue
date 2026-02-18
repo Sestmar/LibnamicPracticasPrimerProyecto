@@ -1,8 +1,25 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { Bar, Doughnut, Line } from 'vue-chartjs'
+import {
+  Chart as ChartJS,
+  CategoryScale, LinearScale, BarElement,
+  ArcElement, PointElement, LineElement,
+  Title, Tooltip, Legend, Filler
+} from 'chart.js'
+
+// Registramos los componentes de Chart.js que vamos a usar
+ChartJS.register(
+  CategoryScale, LinearScale, BarElement,
+  ArcElement, PointElement, LineElement,
+  Title, Tooltip, Legend, Filler
+)
+
+const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
 const allOrders = ref([])
+const stats = ref(null)
 const router = useRouter()
 const token = localStorage.getItem('token')
 const role = localStorage.getItem('role')
@@ -15,66 +32,149 @@ const fetchAllOrders = async () => {
     const response = await fetch('http://localhost:8000/admin/orders', {
       headers: { 'Authorization': `Bearer ${token}` }
     })
-    if (response.ok) {
-      allOrders.value = await response.json()
-      allOrders.value.reverse() // Más recientes arriba
-    }
+    allOrders.value = await response.json()
+  } catch (e) {
+    console.error('Error cargando pedidos:', e)
+  }
+}
+
+const fetchStats = async () => {
+  try {
+    const response = await fetch('http://localhost:8000/admin/stats', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    stats.value = await response.json()
+  } catch (e) {
+    console.error('Error cargando estadísticas:', e)
+  }
+}
+
+// --- ACTUALIZAR ESTADO DE PEDIDO ---
+const updateStatus = async (orderId, newStatus) => {
+  try {
+    await fetch(`http://localhost:8000/orders/${orderId}/status?status=${newStatus}`, {
+      method: 'PATCH',
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    fetchAllOrders()
+    fetchStats() // Refrescamos métricas tras cambiar estado
   } catch (e) {
     console.error(e)
   }
 }
 
-// --- ACTUALIZAR ESTADO ---
-const updateStatus = async (orderId, newStatus) => {
+// --- DESCARGAR FACTURA PDF ---
+const downloadInvoice = async (orderId) => {
   try {
-    const response = await fetch(`http://localhost:8000/orders/${orderId}/status?status=${newStatus}`, {
-      method: 'PATCH',
+    const response = await fetch(`http://localhost:8000/orders/${orderId}/invoice`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
-    if (response.ok) {
-      const order = allOrders.value.find(o => o.id === orderId)
-      if (order) order.status = newStatus
-      // No alertamos para que sea más rápido trabajar
-    }
+    if (!response.ok) throw new Error('Error al descargar factura')
+    const blob = await response.blob()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `factura_${orderId}.pdf`
+    a.click()
+    window.URL.revokeObjectURL(url)
   } catch (e) {
-    alert('Error al conectar')
+    alert('❌ ' + e.message)
   }
 }
 
-// --- LÓGICA DEL GRÁFICO (Ingresos por Estado) ---
-const chartData = computed(() => {
-  const data = {
-    'PENDIENTE': 0,
-    'ENVIADO': 0,
-    'ENTREGADO': 0
+// --- CONFIGURACIÓN DE GRÁFICOS ---
+
+// Gráfico de barras: Ingresos por mes
+const barChartData = computed(() => {
+  if (!stats.value || !stats.value.monthly_sales.length) return null
+  return {
+    labels: stats.value.monthly_sales.map(m => `${MONTH_NAMES[m.month - 1]} ${m.year}`),
+    datasets: [{
+      label: 'Ingresos (€)',
+      data: stats.value.monthly_sales.map(m => m.revenue),
+      backgroundColor: 'rgba(52, 152, 219, 0.7)',
+      borderColor: '#3498db',
+      borderWidth: 2,
+      borderRadius: 6
+    }]
   }
-  
-  allOrders.value.forEach(order => {
-    // Si el estado existe en nuestro objeto, sumamos el total
-    if (data[order.status]) {
-      data[order.status] += order.total_price
-    } else {
-      // Por si hay estados antiguos o raros
-      data[order.status] = (data[order.status] || 0) + order.total_price
-    }
-  })
-  
-  // Encontrar el valor máximo para escalar las barras (100% de altura)
-  const maxVal = Math.max(...Object.values(data)) || 1 
-  
-  return Object.keys(data).map(key => ({
-    label: key,
-    value: data[key],
-    height: (data[key] / maxVal) * 100 + '%'
-  }))
 })
 
-const formatDate = (dateString) => {
-  const d = new Date(dateString)
-  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+const barChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false },
+    tooltip: {
+      callbacks: { label: (ctx) => `${ctx.parsed.y.toFixed(2)} €` }
+    }
+  },
+  scales: {
+    y: {
+      beginAtZero: true,
+      ticks: { callback: (v) => v + ' €' }
+    }
+  }
 }
 
-onMounted(fetchAllOrders)
+// Gráfico de dona: Top 5 productos
+const doughnutData = computed(() => {
+  if (!stats.value || !stats.value.top_products.length) return null
+  const colors = ['#3498db', '#2ecc71', '#f39c12', '#e74c3c', '#9b59b6']
+  return {
+    labels: stats.value.top_products.map(p => p.name),
+    datasets: [{
+      data: stats.value.top_products.map(p => p.units_sold),
+      backgroundColor: colors.slice(0, stats.value.top_products.length),
+      borderWidth: 2,
+      borderColor: '#fff'
+    }]
+  }
+})
+
+const doughnutOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { position: 'bottom', labels: { padding: 15, font: { size: 12 } } }
+  }
+}
+
+// Gráfico de línea: Evolución de pedidos por mes
+const lineChartData = computed(() => {
+  if (!stats.value || !stats.value.monthly_sales.length) return null
+  return {
+    labels: stats.value.monthly_sales.map(m => `${MONTH_NAMES[m.month - 1]} ${m.year}`),
+    datasets: [{
+      label: 'Pedidos',
+      data: stats.value.monthly_sales.map(m => m.orders),
+      borderColor: '#2ecc71',
+      backgroundColor: 'rgba(46, 204, 113, 0.1)',
+      fill: true,
+      tension: 0.4,
+      pointRadius: 5,
+      pointBackgroundColor: '#2ecc71'
+    }]
+  }
+})
+
+const lineChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+  scales: {
+    y: { beginAtZero: true, ticks: { stepSize: 1 } }
+  }
+}
+
+const formatDate = (dateString) => {
+  return new Date(dateString).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+onMounted(() => {
+  fetchAllOrders()
+  fetchStats()
+})
 </script>
 
 <template>
@@ -85,39 +185,62 @@ onMounted(fetchAllOrders)
         <h1>Panel de Gerencia</h1>
         <p class="subtitle">Libnamic ERP System v2.0</p>
       </div>
-      <button @click="router.push('/products')" class="nav-btn">⬅ Volver al Catálogo</button>
+      <button @click="router.push('/products')" class="back-btn">← Volver al Catálogo</button>
     </header>
 
-    <div class="metrics-grid">
-      
-      <div class="card kpi-card">
-        <h3>Resumen Financiero</h3>
-        <div class="kpi-row">
-          <div class="kpi">
-            <span>Ingresos Totales</span>
-            <strong>{{ allOrders.reduce((sum, o) => sum + o.total_price, 0).toFixed(2) }} €</strong>
-          </div>
-          <div class="kpi">
-            <span>Pedidos Activos</span>
-            <strong style="color: #f39c12">
-              {{ allOrders.filter(o => o.status !== 'ENTREGADO').length }}
-            </strong>
-          </div>
+    <!-- KPI CARDS -->
+    <div class="kpi-row" v-if="stats">
+      <div class="kpi-card revenue">
+        <span class="kpi-icon">💰</span>
+        <div class="kpi-data">
+          <span class="kpi-value">{{ stats.total_revenue.toFixed(2) }} €</span>
+          <span class="kpi-label">Ingresos Totales</span>
         </div>
       </div>
-
-      <div class="card chart-card">
-        <h3>Flujo de Caja por Estado</h3>
-        <div class="chart-container">
-          <div v-for="bar in chartData" :key="bar.label" class="bar-group">
-            <div class="bar-value">{{ bar.value.toFixed(0) }}€</div>
-            <div class="bar" :style="{ height: bar.height, background: bar.label === 'ENTREGADO' ? '#27ae60' : '#3498db' }"></div>
-            <div class="bar-label">{{ bar.label }}</div>
-          </div>
+      <div class="kpi-card orders">
+        <span class="kpi-icon">📦</span>
+        <div class="kpi-data">
+          <span class="kpi-value">{{ stats.total_orders }}</span>
+          <span class="kpi-label">Pedidos Totales</span>
+        </div>
+      </div>
+      <div class="kpi-card ticket">
+        <span class="kpi-icon">🎫</span>
+        <div class="kpi-data">
+          <span class="kpi-value">{{ stats.avg_ticket.toFixed(2) }} €</span>
+          <span class="kpi-label">Ticket Medio</span>
         </div>
       </div>
     </div>
 
+    <!-- GRÁFICOS -->
+    <div class="charts-grid" v-if="stats">
+      <div class="chart-card wide">
+        <h3>Ingresos Mensuales</h3>
+        <div class="chart-wrapper">
+          <Bar v-if="barChartData" :data="barChartData" :options="barChartOptions" />
+          <p v-else class="no-data">Aún no hay datos de ventas</p>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <h3>Productos Más Vendidos</h3>
+        <div class="chart-wrapper">
+          <Doughnut v-if="doughnutData" :data="doughnutData" :options="doughnutOptions" />
+          <p v-else class="no-data">Aún no hay ventas registradas</p>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <h3>Evolución de Pedidos</h3>
+        <div class="chart-wrapper">
+          <Line v-if="lineChartData" :data="lineChartData" :options="lineChartOptions" />
+          <p v-else class="no-data">Aún no hay datos de pedidos</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABLA DE GESTIÓN DE PEDIDOS -->
     <h2 class="section-title">Gestión de Envíos y Clientes</h2>
     
     <div class="table-wrapper">
@@ -137,14 +260,13 @@ onMounted(fetchAllOrders)
             
             <td>
               <div class="client-info">
-                <span class="client-name">👤 {{ order.owner.first_name }} {{ order.owner.last_name }}</span>
-                <span class="client-phone">📞 {{ order.owner.phone || 'Sin teléfono' }}</span>
-                <span class="client-email">✉️ {{ order.owner.email }}</span>
+                <span class="client-name">{{ order.owner.first_name }} {{ order.owner.last_name }}</span>
+                <span class="client-email">{{ order.owner.email }}</span>
+                <span v-if="order.owner.phone" class="client-email">📞 {{ order.owner.phone }}</span>
               </div>
             </td>
-
             <td>{{ formatDate(order.created_at) }}</td>
-            <td class="price-cell">{{ order.total_price }} €</td>
+            <td class="price-cell">{{ order.total_price.toFixed(2) }} €</td>
             
             <td>
               <span :class="['status-pill', order.status.toLowerCase()]">
@@ -161,7 +283,7 @@ onMounted(fetchAllOrders)
               </button>
 
               <button 
-                v-if="order.status === 'ENVIADO'"
+                v-else-if="order.status === 'ENVIADO'"
                 @click="updateStatus(order.id, 'ENTREGADO')" 
                 class="btn-action complete">
                 ✅ Confirmar Entrega
@@ -170,6 +292,10 @@ onMounted(fetchAllOrders)
               <span v-if="order.status === 'ENTREGADO'" class="text-muted">
                 Ciclo cerrado
               </span>
+
+              <button @click="downloadInvoice(order.id)" class="btn-action invoice" title="Descargar factura">
+                📄 PDF
+              </button>
             </td>
           </tr>
         </tbody>
@@ -181,40 +307,58 @@ onMounted(fetchAllOrders)
 <style scoped>
 /* GENERAL */
 .dashboard-container { max-width: 1200px; margin: 0 auto; padding: 40px 20px; font-family: 'Segoe UI', sans-serif; background-color: #f4f6f9; min-height: 100vh; }
-.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; }
-.title-group h1 { margin: 0; color: #2c3e50; font-size: 1.8rem; }
-.subtitle { margin: 5px 0 0; color: #7f8c8d; }
-.nav-btn { background: white; border: 1px solid #ccc; padding: 10px 20px; border-radius: 6px; cursor: pointer; transition: 0.2s; }
-.nav-btn:hover { background: #e2e6ea; }
 
-/* METRICS GRID */
-.metrics-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 20px; margin-bottom: 40px; }
-.card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-.card h3 { margin-top: 0; color: #7f8c8d; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; }
+/* HEADER */
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+.title-group h1 { font-size: 2rem; color: #1a202c; margin: 0; }
+.subtitle { color: #718096; margin: 0; }
+.back-btn { background: white; border: 1px solid #e2e8f0; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.2s; }
+.back-btn:hover { background: #f7fafc; border-color: #cbd5e0; }
 
-/* KPI CARD */
-.kpi-row { display: flex; flex-direction: column; gap: 20px; margin-top: 20px; }
-.kpi span { display: block; font-size: 0.9rem; color: #666; margin-bottom: 5px; }
-.kpi strong { font-size: 1.8rem; color: #2c3e50; }
+/* KPI CARDS */
+.kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-bottom: 2rem; }
+.kpi-card {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  border-left: 4px solid;
+}
+.kpi-card.revenue { border-color: #2ecc71; }
+.kpi-card.orders { border-color: #3498db; }
+.kpi-card.ticket { border-color: #f39c12; }
+.kpi-icon { font-size: 2rem; }
+.kpi-data { display: flex; flex-direction: column; }
+.kpi-value { font-size: 1.75rem; font-weight: 800; color: #1a202c; }
+.kpi-label { font-size: 0.85rem; color: #718096; text-transform: uppercase; letter-spacing: 0.5px; }
 
-/* CHART CSS (Simple bars) */
-.chart-container { display: flex; justify-content: space-around; align-items: flex-end; height: 150px; margin-top: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
-.bar-group { display: flex; flex-direction: column; align-items: center; width: 30%; height: 100%; justify-content: flex-end; }
-.bar { width: 40px; border-radius: 4px 4px 0 0; transition: height 0.5s ease; min-height: 4px; }
-.bar-value { font-size: 0.8rem; font-weight: bold; margin-bottom: 5px; color: #2c3e50; }
-.bar-label { margin-top: 10px; font-size: 0.8rem; color: #7f8c8d; font-weight: 600; }
+/* CHARTS GRID */
+.charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 3rem; }
+.chart-card {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.chart-card.wide { grid-column: 1 / -1; }
+.chart-card h3 { margin: 0 0 1rem; color: #2c3e50; font-size: 1.1rem; }
+.chart-wrapper { height: 250px; position: relative; }
+.no-data { text-align: center; color: #a0aec0; padding-top: 80px; }
 
 /* TABLE */
-.section-title { color: #2c3e50; margin-bottom: 20px; font-size: 1.4rem; }
-.table-wrapper { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-.custom-table { width: 100%; border-collapse: collapse; text-align: left; }
-.custom-table th { background: #f8f9fa; padding: 18px; color: #555; font-weight: 700; font-size: 0.85rem; text-transform: uppercase; }
-.custom-table td { padding: 18px; border-bottom: 1px solid #eee; vertical-align: middle; }
+.section-title { font-size: 1.5rem; color: #2c3e50; margin-bottom: 1.5rem; margin-top: 1rem; }
+.table-wrapper { background: white; border-radius: 12px; overflow-x: auto; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.custom-table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+.custom-table th { background: #f8f9fa; padding: 14px 16px; text-align: left; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.5px; color: #718096; border-bottom: 2px solid #edf2f7; }
+.custom-table td { padding: 14px 16px; border-bottom: 1px solid #f0f4f8; vertical-align: middle; }
+.id-cell { font-weight: bold; color: #2c3e50; }
 
 /* CLIENT INFO */
 .client-info { display: flex; flex-direction: column; gap: 2px; }
-.client-name { font-weight: bold; color: #2c3e50; }
-.client-phone { font-size: 0.85rem; color: #e67e22; font-weight: 600; }
+.client-name { font-weight: 600; color: #2d3748; }
 .client-email { font-size: 0.8rem; color: #95a5a6; }
 
 /* STATUS PILLS */
@@ -224,12 +368,14 @@ onMounted(fetchAllOrders)
 .status-pill.entregado { background: #d1fae5; color: #065f46; }
 
 /* BUTTONS */
-.btn-action { border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; color: white; transition: transform 0.1s; }
-.btn-action:active { transform: scale(0.95); }
+.btn-action { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; color: white; font-size: 0.85rem; transition: all 0.2s; }
 .ship { background: #3498db; box-shadow: 0 2px 5px rgba(52, 152, 219, 0.3); }
 .ship:hover { background: #2980b9; }
 .complete { background: #27ae60; box-shadow: 0 2px 5px rgba(39, 174, 96, 0.3); }
 .complete:hover { background: #219150; }
 .text-muted { color: #bdc3c7; font-style: italic; font-size: 0.9rem; }
 .price-cell { font-weight: bold; font-size: 1.1rem; }
+.invoice { background: #8e44ad; box-shadow: 0 2px 5px rgba(142, 68, 173, 0.3); }
+.invoice:hover { background: #7d389e; }
+.actions-cell { display: flex; gap: 8px; align-items: center; }
 </style>
