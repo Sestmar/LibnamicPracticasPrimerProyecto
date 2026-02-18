@@ -22,44 +22,18 @@ const removeFromCart = (index) => {
   localStorage.setItem('shopping_cart', JSON.stringify(cart.value))
 }
 
-// FINALIZAR COMPRA (Aquí conectamos con el Backend)
-const checkout = async () => {
+// --- CAMBIO CLAVE: PROCESAR PAGO ---
+// Ya no llamamos al backend aquí. Redirigimos a la vista de pago.
+const proceedToPayment = () => {
   if (!token) {
+    // Si no está logueado, al login
     router.push('/login')
     return
   }
-
-  // Preparamos los datos como los quiere el Backend:
-  // items: [{ product_id: 1, quantity: 2 }, ...]
-  const orderItems = cart.value.map(item => ({
-    product_id: item.id,
-    quantity: item.quantity
-  }))
-
-  try {
-    const response = await fetch('http://localhost:8000/orders/', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ items: orderItems })
-    })
-
-    if (response.ok) {
-      alert('✅ ¡Compra confirmada! Pedido realizado.')
-      // Limpiamos el carrito
-      localStorage.removeItem('shopping_cart')
-      cart.value = []
-      router.push('/my-orders')
-    } else {
-      const err = await response.json()
-      alert('❌ Error: ' + err.detail)
-    }
-  } catch (e) {
-    console.error(e)
-    alert('Error de conexión')
-  }
+  
+  // Si hay token, nos vamos a la pasarela de pago (PaymentView.vue)
+  // Allí es donde se hará la conexión con Stripe
+  router.push('/payment')
 }
 </script>
 
@@ -92,7 +66,7 @@ const checkout = async () => {
           <span>Total a pagar:</span>
           <strong>{{ total.toFixed(2) }} €</strong>
         </div>
-        <button @click="checkout" class="checkout-btn">✅ Confirmar Compra</button>
+        <button @click="proceedToPayment" class="checkout-btn">💳 Proceder al Pago</button>
       </div>
     </div>
   </div>
