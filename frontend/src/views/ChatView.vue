@@ -7,6 +7,10 @@ const token = localStorage.getItem('token')
 const userRole = localStorage.getItem('role')
 const userName = localStorage.getItem('full_name') || 'Usuario'
 
+// CAMBIO: Variables de entorno
+const apiUrl = import.meta.env.VITE_API_URL
+const wsUrl = import.meta.env.VITE_WS_URL
+
 if (!token) router.push('/login')
 
 // --- ESTADO ---
@@ -47,7 +51,8 @@ const connectToRoom = (roomId) => {
   currentRoomId.value = roomId
   selectedRoom.value = roomId
   
-  ws = new WebSocket(`ws://localhost:8000/ws/chat/${roomId}?token=${token}`)
+  // CAMBIO: Usar variable wsUrl con comillas invertidas
+  ws = new WebSocket(`${wsUrl}/ws/chat/${roomId}?token=${token}`)
   
   ws.onopen = () => {
     connected.value = true
@@ -87,7 +92,8 @@ const sendMessage = () => {
 // Admin: cargar salas activas
 const fetchActiveRooms = async () => {
   try {
-    const response = await fetch('http://localhost:8000/admin/chat-rooms', {
+    // CAMBIO: Usar apiUrl
+    const response = await fetch(`${apiUrl}/admin/chat-rooms`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
     activeRooms.value = await response.json()
@@ -503,7 +509,7 @@ onUnmounted(() => {
 .input-area {
   background: var(--bg-secondary);
   padding: 14px 24px;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-color);L
   display: flex;
   gap: 10px;
 }

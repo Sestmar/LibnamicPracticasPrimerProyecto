@@ -8,6 +8,9 @@ const router = useRouter()
 const token = localStorage.getItem('token')
 const userRole = localStorage.getItem('role')
 
+// DEFINIMOS LA URL DE LA API DESDE VARIABLES DE ENTORNO
+const apiUrl = import.meta.env.VITE_API_URL
+
 // Estado para el formulario (Crear o Editar)
 const isEditing = ref(false)
 const editingId = ref(null)
@@ -39,7 +42,8 @@ if (!token) router.push('/login')
 // --- CARGAR PRODUCTOS ---
 const fetchProducts = async () => {
   try {
-    const response = await fetch('http://localhost:8000/products/', {
+    // CAMBIO: Uso de apiUrl con comillas invertidas
+    const response = await fetch(`${apiUrl}/products/`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
     if (!response.ok) throw new Error('Error al cargar productos')
@@ -51,9 +55,11 @@ const fetchProducts = async () => {
 
 // --- GUARDAR (CREAR O EDITAR) ---
 const saveProduct = async () => {
+  // CAMBIO: Uso de apiUrl en ambas opciones
   const url = isEditing.value 
-    ? `http://localhost:8000/products/${editingId.value}`
-    : 'http://localhost:8000/products/'
+    ? `${apiUrl}/products/${editingId.value}`
+    : `${apiUrl}/products/`
+  
   const method = isEditing.value ? 'PUT' : 'POST'
 
   try {
@@ -84,7 +90,8 @@ const saveProduct = async () => {
 const deleteProduct = async (id) => {
   if(!confirm('¿Seguro que quieres borrar este producto?')) return
   try {
-    const response = await fetch(`http://localhost:8000/products/${id}`, {
+    // CAMBIO: Uso de apiUrl
+    const response = await fetch(`${apiUrl}/products/${id}`, {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${token}` }
     })

@@ -4,7 +4,13 @@ import { useRouter } from 'vue-router'
 import { loadStripe } from '@stripe/stripe-js'
 
 const router = useRouter()
-const stripePromise = loadStripe('pk_test_51T2BSjCg7aB3krx8ZujcpTSWZMnCmIjyCMIw8duCMrmkBppwrqRG98LOtOQL2xGOGknucoh93INU4UO1DGKU7F3J00SczNV1zG')
+
+// CAMBIO: Usamos las variables de entorno para la API y para la clave de Stripe
+const apiUrl = import.meta.env.VITE_API_URL
+const stripeKey = import.meta.env.VITE_STRIPE_KEY
+
+// Inicializamos Stripe con la clave del entorno (Render)
+const stripePromise = loadStripe(stripeKey)
 
 const clientSecret = ref('')
 const stripe = ref(null)
@@ -27,7 +33,8 @@ onMounted(async () => {
     const token = localStorage.getItem('token')
     const orderItems = cart.value.map(item => ({ product_id: item.id, quantity: item.quantity }))
 
-    const response = await fetch('http://localhost:8000/create-payment-intent', {
+    // CAMBIO: URL dinámica
+    const response = await fetch(`${apiUrl}/create-payment-intent`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -71,6 +78,7 @@ const handleSubmit = async () => {
   const { error } = await stripe.value.confirmPayment({
     elements: elements.value,
     confirmParams: {
+      // window.location.origin ya devuelve la URL correcta (localhost o Render) automáticamente
       return_url: window.location.origin + '/payment-success',
     },
     redirect: 'if_required' 
@@ -89,7 +97,8 @@ const createOrderInBackend = async () => {
     const token = localStorage.getItem('token')
     const orderItems = cart.value.map(item => ({ product_id: item.id, quantity: item.quantity }))
 
-    const response = await fetch('http://localhost:8000/orders/', {
+    // CAMBIO: URL dinámica
+    const response = await fetch(`${apiUrl}/orders/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

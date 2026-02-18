@@ -7,12 +7,13 @@ const router = useRouter()
 const isLoading = ref(false)
 const error = ref('')
 const success = ref(false)
+const apiUrl = import.meta.env.VITE_API_URL
 
 const register = async () => {
   error.value = ''
   isLoading.value = true
   try {
-    const response = await fetch('http://localhost:8000/register', {
+    const response = await fetch(`${apiUrl}/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(form.value)

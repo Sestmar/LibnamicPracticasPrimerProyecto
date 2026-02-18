@@ -7,11 +7,15 @@ const error = ref('')
 const router = useRouter()
 const token = localStorage.getItem('token')
 
+// CAMBIO: Definir la variable de entorno
+const apiUrl = import.meta.env.VITE_API_URL
+
 if (!token) { router.push('/login') }
 
 const fetchOrders = async () => {
   try {
-    const response = await fetch('http://localhost:8000/orders/my-orders', {
+    // CAMBIO: Usar ${apiUrl} con comillas invertidas
+    const response = await fetch(`${apiUrl}/orders/my-orders`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
     if (!response.ok) throw new Error('Error al cargar pedidos')
@@ -32,7 +36,8 @@ const goBack = () => router.push('/products')
 
 const downloadInvoice = async (orderId) => {
   try {
-    const response = await fetch(`http://localhost:8000/orders/${orderId}/invoice`, {
+    // CAMBIO: Usar ${apiUrl} con comillas invertidas
+    const response = await fetch(`${apiUrl}/orders/${orderId}/invoice`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
     if (!response.ok) throw new Error('Error al descargar factura')

@@ -23,11 +23,15 @@ const router = useRouter()
 const token = localStorage.getItem('token')
 const role = localStorage.getItem('role')
 
+// CAMBIO: Variable de entorno
+const apiUrl = import.meta.env.VITE_API_URL
+
 if (role !== 'admin') router.push('/products')
 
 const fetchAllOrders = async () => {
   try {
-    const response = await fetch('http://localhost:8000/admin/orders', {
+    // CAMBIO: Usar apiUrl
+    const response = await fetch(`${apiUrl}/admin/orders`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
     allOrders.value = await response.json()
@@ -36,7 +40,8 @@ const fetchAllOrders = async () => {
 
 const fetchStats = async () => {
   try {
-    const response = await fetch('http://localhost:8000/admin/stats', {
+    // CAMBIO: Usar apiUrl
+    const response = await fetch(`${apiUrl}/admin/stats`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
     stats.value = await response.json()
@@ -45,7 +50,8 @@ const fetchStats = async () => {
 
 const updateStatus = async (orderId, newStatus) => {
   try {
-    await fetch(`http://localhost:8000/orders/${orderId}/status?status=${newStatus}`, {
+    // CAMBIO: Usar apiUrl
+    await fetch(`${apiUrl}/orders/${orderId}/status?status=${newStatus}`, {
       method: 'PATCH',
       headers: { 'Authorization': `Bearer ${token}` }
     })
@@ -56,7 +62,8 @@ const updateStatus = async (orderId, newStatus) => {
 
 const downloadInvoice = async (orderId) => {
   try {
-    const response = await fetch(`http://localhost:8000/orders/${orderId}/invoice`, {
+    // CAMBIO: Usar apiUrl
+    const response = await fetch(`${apiUrl}/orders/${orderId}/invoice`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
     if (!response.ok) throw new Error('Error al descargar factura')

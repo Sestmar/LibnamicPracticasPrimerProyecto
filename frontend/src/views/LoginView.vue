@@ -8,6 +8,9 @@ const router = useRouter()
 const error = ref('')
 const isLoading = ref(false)
 
+// CAMBIO: Definir la variable de entorno
+const apiUrl = import.meta.env.VITE_API_URL
+
 const login = async () => {
   error.value = ''
   isLoading.value = true
@@ -17,7 +20,8 @@ const login = async () => {
   formData.append('password', password.value)
 
   try {
-    const response = await fetch('http://localhost:8000/token', {
+    // CAMBIO: Usar ${apiUrl} con comillas invertidas
+    const response = await fetch(`${apiUrl}/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: formData
