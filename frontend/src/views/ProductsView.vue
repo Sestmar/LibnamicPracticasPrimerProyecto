@@ -11,17 +11,22 @@ const userRole = localStorage.getItem('role')
 // Estado para el formulario (Crear o Editar)
 const isEditing = ref(false)
 const editingId = ref(null)
-
 const newProduct = ref({ name: '', description: '', price: 0, stock: 0, sku: '' })
 
 // Estado del buscador predictivo
 const searchQuery = ref('')
 
-// Filtrado reactivo: se recalcula automáticamente al escribir
+// Toast notification
+const toast = ref({ show: false, message: '', type: 'success' })
+const showToast = (message, type = 'success') => {
+  toast.value = { show: true, message, type }
+  setTimeout(() => { toast.value.show = false }, 2500)
+}
+
+// Filtrado reactivo
 const filteredProducts = computed(() => {
   const query = searchQuery.value.toLowerCase().trim()
   if (!query) return products.value
-
   return products.value.filter(product => {
     return product.name.toLowerCase().includes(query)
       || product.sku.toLowerCase().includes(query)
@@ -49,7 +54,6 @@ const saveProduct = async () => {
   const url = isEditing.value 
     ? `http://localhost:8000/products/${editingId.value}`
     : 'http://localhost:8000/products/'
-  
   const method = isEditing.value ? 'PUT' : 'POST'
 
   try {
@@ -63,46 +67,41 @@ const saveProduct = async () => {
     })
 
     if (!response.ok) {
-        const err = await response.json()
-        throw new Error(err.detail)
+      const err = await response.json()
+      throw new Error(err.detail)
     }
 
-    alert(isEditing.value ? '✅ Producto actualizado' : '✅ Producto creado')
-    cancelEdit() // Limpia el formulario
+    showToast(isEditing.value ? 'Producto actualizado' : 'Producto creado')
+    cancelEdit()
     fetchProducts()
     
   } catch (e) {
-    alert('❌ Error: ' + e.message)
+    showToast('Error: ' + e.message, 'error')
   }
 }
 
 // --- BORRAR PRODUCTO ---
 const deleteProduct = async (id) => {
   if(!confirm('¿Seguro que quieres borrar este producto?')) return
-
   try {
     const response = await fetch(`http://localhost:8000/products/${id}`, {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${token}` }
     })
-    
     if (response.ok) {
+      showToast('Producto eliminado')
       fetchProducts()
     } else {
-      alert('Error al borrar')
+      showToast('Error al borrar', 'error')
     }
-  } catch (e) {
-    console.error(e)
-  }
+  } catch (e) { console.error(e) }
 }
 
 // --- PREPARAR FORMULARIO PARA EDITAR ---
 const startEdit = (product) => {
   isEditing.value = true
   editingId.value = product.id
-  // Copiamos los datos del producto al formulario
   newProduct.value = { ...product } 
-  // Scroll suave hacia arriba para ver el formulario
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
@@ -115,34 +114,28 @@ const cancelEdit = () => {
 
 // --- FUNCIÓN CARRITO ---
 const addToCart = (product) => {
-  // 1. Recuperamos el carrito actual (o creamos uno vacío)
   let cart = JSON.parse(localStorage.getItem('shopping_cart') || '[]')
-  
-  // 2. Busco si el producto ya estaba para sumar cantidad
   const existingItem = cart.find(item => item.id === product.id)
   
   if (existingItem) {
     if (existingItem.quantity < product.stock) {
       existingItem.quantity++
     } else {
-      alert('¡No hay más stock disponible!')
+      showToast('No hay más stock disponible', 'error')
       return
     }
   } else {
-    // Si es nuevo, lo añado con cantidad 1
-    // Guardo solo lo necesario: id, nombre, precio
     cart.push({
       id: product.id,
       name: product.name,
       price: product.price,
       quantity: 1,
-      stock: product.stock // Para validar stock en el carrito
+      stock: product.stock
     })
   }
 
-  // 3. Guardamos en LocalStorage
   localStorage.setItem('shopping_cart', JSON.stringify(cart))
-  alert('🛒 Producto añadido al carrito')
+  showToast(`${product.name} añadido al carrito`)
 }
 
 const logout = () => {
@@ -157,33 +150,54 @@ onMounted(fetchProducts)
 
 <template>
   <div class="main-layout">
+    <!-- Toast notification -->
+    <Transition name="toast">
+      <div v-if="toast.show" :class="['toast', toast.type]">
+        <span class="toast-icon">{{ toast.type === 'success' ? '✓' : '✕' }}</span>
+        {{ toast.message }}
+      </div>
+    </Transition>
+
+    <!-- Navbar -->
     <nav class="navbar">
       <div class="nav-content">
-        <div class="logo">LibnamicShop</div>
+        <div class="logo" @click="router.push('/products')">
+          <svg width="28" height="28" viewBox="0 0 40 40" fill="none">
+            <rect width="40" height="40" rx="10" fill="url(#navGrad)"/>
+            <path d="M12 20L18 26L28 14" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            <defs><linearGradient id="navGrad" x1="0" y1="0" x2="40" y2="40"><stop stop-color="#6c5ce7"/><stop offset="1" stop-color="#00cec9"/></linearGradient></defs>
+          </svg>
+          <span>LibnamicShop</span>
+        </div>
         <div class="nav-actions">
-          <button @click="router.push('/my-orders')" class="nav-btn secondary">
-            Mis Pedidos
+          <button @click="router.push('/my-orders')" class="nav-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            Pedidos
           </button>
           
           <button 
             v-if="userRole === 'admin'" 
             @click="router.push('/admin')" 
-            class="nav-btn settings-btn">
-            Ajustes
+            class="nav-btn admin-nav-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            Panel Admin
           </button>
 
           <button 
             v-else 
             @click="router.push('/cart')" 
-            class="nav-btn cart-btn">
-            🛒 Carrito
+            class="nav-btn cart-nav-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+            Carrito
           </button>
 
-          <button @click="router.push('/chat')" class="nav-btn chat-nav-btn">
-            💬 Chat
+          <button @click="router.push('/chat')" class="nav-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Chat
           </button>
 
-          <button @click="logout" class="nav-btn danger">
+          <button @click="logout" class="nav-btn nav-btn-danger">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
             Salir
           </button>
         </div>
@@ -191,13 +205,14 @@ onMounted(fetchProducts)
     </nav>
 
     <main class="container">
+      <!-- Page Header -->
       <header class="page-header">
         <h1>Catálogo de Productos</h1>
         <p class="subtitle">Gestión de Inventario y Ventas</p>
 
-        <!-- Buscador predictivo -->
+        <!-- Search bar -->
         <div class="search-wrapper">
-          <span class="search-icon">🔍</span>
+          <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <input 
             v-model="searchQuery" 
             type="text" 
@@ -208,20 +223,24 @@ onMounted(fetchProducts)
         </div>
       </header>
 
+      <!-- Admin Panel -->
       <div v-if="userRole === 'admin'" class="admin-panel">
         <div class="panel-header">
-          <h2>{{ isEditing ? 'Editar Producto' : 'Nuevo Producto' }}</h2>
-          <button v-if="isEditing" @click="cancelEdit" class="cancel-btn">Cancelar Edición</button>
+          <h2>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            {{ isEditing ? 'Editar Producto' : 'Nuevo Producto' }}
+          </h2>
+          <button v-if="isEditing" @click="cancelEdit" class="cancel-btn">Cancelar</button>
         </div>
 
         <form @submit.prevent="saveProduct" class="admin-form">
           <div class="form-row">
             <div class="input-group">
-              <label>Nombre del Producto</label>
+              <label>Nombre</label>
               <input v-model="newProduct.name" placeholder="Ej: Monitor 24''" required />
             </div>
             <div class="input-group">
-              <label>Código SKU</label>
+              <label>SKU</label>
               <input v-model="newProduct.sku" placeholder="Ej: MON-001" required />
             </div>
           </div>
@@ -237,41 +256,47 @@ onMounted(fetchProducts)
               <input v-model.number="newProduct.price" type="number" step="0.01" required />
             </div>
             <div class="input-group">
-              <label>Stock Inicial</label>
+              <label>Stock</label>
               <input v-model.number="newProduct.stock" type="number" required />
             </div>
-            
             <button type="submit" class="create-btn">
-              {{ isEditing ? 'Guardar Cambios' : '➕ Añadir Producto' }}
+              {{ isEditing ? '💾 Guardar' : '➕ Añadir' }}
             </button>
           </div>
         </form>
       </div>
 
+      <!-- Error state -->
       <div v-if="error" class="error-banner">{{ error }}</div>
 
+      <!-- Empty search -->
       <div v-else-if="filteredProducts.length === 0" class="no-results">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <p>No se encontraron productos para "<strong>{{ searchQuery }}</strong>"</p>
       </div>
 
+      <!-- Product Grid -->
       <div v-else class="product-grid">
-        <div v-for="product in filteredProducts" :key="product.id" class="product-card">
+        <div 
+          v-for="(product, index) in filteredProducts" 
+          :key="product.id" 
+          class="product-card"
+          :style="{ animationDelay: `${index * 0.05}s` }"
+        >
           <div class="card-image">
-            
+            <div class="card-image-pattern"></div>
+            <span class="card-sku-badge">{{ product.sku }}</span>
           </div>
 
           <div class="card-body">
-            <div class="card-header">
-              <h3>{{ product.name }}</h3>
-              <span class="sku">{{ product.sku }}</span>
-            </div>
-            <p class="description">{{ product.description }}</p>
+            <h3>{{ product.name }}</h3>
+            <p class="description">{{ product.description || 'Sin descripción' }}</p>
             
             <div class="card-footer">
-              <div class="price-stock">
-                <span class="price">{{ product.price }} €</span>
-                <span :class="['stock-badge', product.stock < 5 ? 'low' : 'good']">
-                  Stock: {{ product.stock }}
+              <div class="price-row">
+                <span class="price">{{ product.price.toFixed(2) }} €</span>
+                <span :class="['stock-badge', product.stock < 5 ? 'low' : product.stock === 0 ? 'out' : 'good']">
+                  {{ product.stock > 0 ? `${product.stock} en stock` : 'Agotado' }}
                 </span>
               </div>
               
@@ -280,14 +305,14 @@ onMounted(fetchProducts)
                 @click="addToCart(product)" 
                 :disabled="product.stock === 0"
                 class="buy-btn">
-                {{ product.stock > 0 ? '🛒 Añadir al Carrito' : 'Agotado' }}
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+                {{ product.stock > 0 ? 'Añadir al Carrito' : 'Agotado' }}
               </button>
 
               <div v-else class="admin-actions">
                 <button @click="startEdit(product)" class="action-btn edit">✏️ Editar</button>
                 <button @click="deleteProduct(product.id)" class="action-btn delete">🗑️ Borrar</button>
               </div>
-
             </div>
           </div>
         </div>
@@ -297,120 +322,559 @@ onMounted(fetchProducts)
 </template>
 
 <style scoped>
-/* Estilos base */
-.main-layout { min-height: 100vh; background-color: #f8f9fa; font-family: 'Segoe UI', sans-serif; }
-.container { max-width: 1200px; margin: 0 auto; padding: 2rem; padding-top: 100px; }
-.navbar { position: fixed; top: 0; width: 100%; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-bottom: 1px solid #eaeaea; z-index: 1000; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
-.nav-content { max-width: 1200px; margin: 0 auto; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
-.logo { font-size: 1.5rem; font-weight: 800; color: #2c3e50; }
-.nav-actions { display: flex; gap: 1rem; }
-.nav-btn { padding: 0.5rem 1rem; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; transition: all 0.2s; }
-.nav-btn.secondary { background: #eef2f6; color: #2c3e50; }
-.nav-btn.danger { background: #fff0f0; color: #e74c3c; }
-.page-header { margin-bottom: 3rem; text-align: center; }
-.page-header h1 { font-size: 2.5rem; color: #1a202c; margin-bottom: 0.5rem; }
-.product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 2rem; }
+/* Layout */
+.main-layout {
+  min-height: 100vh;
+  background: var(--bg-primary);
+  font-family: 'Inter', sans-serif;
+}
 
-/* BUSCADOR PREDICTIVO */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+  padding-top: 100px;
+}
+
+/* ---- Navbar ---- */
+.navbar {
+  position: fixed;
+  top: 0;
+  width: 100%;
+  background: rgba(10, 10, 20, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border-color);
+  z-index: 1000;
+}
+
+.nav-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0.8rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.logo span {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+.nav-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+}
+
+.nav-btn:hover {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+  border-color: var(--border-color-hover);
+}
+
+.nav-btn svg {
+  opacity: 0.7;
+}
+
+.admin-nav-btn {
+  border-color: rgba(108, 92, 231, 0.3);
+  color: var(--color-primary-light);
+}
+
+.admin-nav-btn:hover {
+  background: rgba(108, 92, 231, 0.1);
+  border-color: var(--color-primary);
+}
+
+.cart-nav-btn {
+  border-color: rgba(0, 206, 201, 0.3);
+  color: var(--color-accent);
+}
+
+.cart-nav-btn:hover {
+  background: rgba(0, 206, 201, 0.1);
+  border-color: var(--color-accent);
+}
+
+.nav-btn-danger {
+  border-color: rgba(255, 118, 117, 0.2);
+  color: var(--color-danger);
+}
+
+.nav-btn-danger:hover {
+  background: rgba(255, 118, 117, 0.1);
+  border-color: var(--color-danger);
+}
+
+/* ---- Page Header ---- */
+.page-header {
+  margin-bottom: 2.5rem;
+  text-align: center;
+  animation: fadeInUp 0.5s ease;
+}
+
+.page-header h1 {
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.03em;
+}
+
+.subtitle {
+  color: var(--text-secondary);
+  font-size: 1rem;
+  margin-top: 0.3rem;
+}
+
+/* ---- Search ---- */
 .search-wrapper {
   position: relative;
   max-width: 500px;
   margin: 1.5rem auto 0;
 }
+
 .search-icon {
   position: absolute;
   left: 16px;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 1.1rem;
+  color: var(--text-muted);
   pointer-events: none;
 }
+
 .search-input {
   width: 100%;
-  padding: 0.875rem 2.5rem 0.875rem 3rem;
-  border: 2px solid #e2e8f0;
-  border-radius: 12px;
-  font-size: 1rem;
-  background: white;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  box-sizing: border-box;
-}
-.search-input:focus {
-  border-color: #42b883;
-  box-shadow: 0 0 0 3px rgba(66, 184, 131, 0.15);
+  padding: 14px 40px 14px 48px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-family: 'Inter', sans-serif;
   outline: none;
+  transition: all var(--transition-normal);
 }
-.search-input::placeholder { color: #a0aec0; }
+
+.search-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-glow);
+  background: var(--bg-surface-hover);
+}
+
+.search-input::placeholder { color: var(--text-muted); }
+
 .clear-btn {
   position: absolute;
   right: 14px;
   top: 50%;
   transform: translateY(-50%);
   cursor: pointer;
-  color: #a0aec0;
-  font-size: 1.1rem;
-  transition: color 0.2s;
-}
-.clear-btn:hover { color: #e74c3c; }
-.no-results {
-  text-align: center;
-  padding: 3rem;
-  color: #718096;
-  font-size: 1.1rem;
+  color: var(--text-muted);
+  font-size: 1rem;
+  transition: color var(--transition-fast);
+  background: none;
+  border: none;
+  display: flex;
+  align-items: center;
 }
 
-/* PANEL ADMIN MEJORADO */
+.clear-btn:hover { color: var(--color-danger); }
+
+/* ---- Admin Panel ---- */
 .admin-panel {
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-left: 5px solid #f39c12; /* Borde naranja a la izquierda */
+  background: var(--bg-glass);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  border-left: 4px solid var(--color-warning);
   padding: 2rem;
-  border-radius: 12px;
-  margin-bottom: 3rem;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  border-radius: var(--radius-lg);
+  margin-bottom: 2.5rem;
+  animation: fadeInUp 0.5s ease;
 }
-.panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-.panel-header h2 { margin: 0; color: #2c3e50; font-size: 1.5rem; }
-.cancel-btn { background: transparent; border: 1px solid #ccc; padding: 5px 10px; border-radius: 4px; cursor: pointer; color: #666; }
 
-.admin-form { display: flex; flex-direction: column; gap: 1.5rem; }
-.form-row { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
 
-/* INPUTS CON ETIQUETAS */
-.input-group { flex: 1; display: flex; flex-direction: column; gap: 0.5rem; min-width: 200px;}
-.input-group label { font-weight: 600; font-size: 0.9rem; color: #4a5568; }
-.input-group input { padding: 0.75rem; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 1rem; transition: border-color 0.2s; }
-.input-group input:focus { border-color: #f39c12; outline: none; }
+.panel-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-primary);
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.cancel-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.85rem;
+  transition: all var(--transition-fast);
+}
+
+.cancel-btn:hover {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.admin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.input-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 180px;
+}
+
+.input-group label {
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.input-group input {
+  padding: 10px 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-family: 'Inter', sans-serif;
+  outline: none;
+  transition: all var(--transition-normal);
+}
+
+.input-group input:focus {
+  border-color: var(--color-warning);
+  box-shadow: 0 0 0 3px rgba(253, 203, 110, 0.15);
+}
 
 .create-btn {
-  background: #f39c12; color: white; border: none; padding: 0 2rem; border-radius: 6px; font-weight: bold; cursor: pointer; transition: background 0.2s; align-self: flex-end; height: 46px; /* Ajuste para alinear con inputs */
+  padding: 10px 24px;
+  background: linear-gradient(135deg, #f39c12, #e67e22);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  height: 42px;
+  white-space: nowrap;
 }
-.create-btn:hover { background: #e67e22; }
 
-/* TARJETAS */
-.product-card { background: white; border-radius: 16px; overflow: hidden; border: 1px solid #f0f0f0; transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; }
-.product-card:hover { transform: translateY(-5px); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
-.card-image { height: 160px; background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); display: flex; align-items: center; justify-content: center; }
-.emoji-placeholder { font-size: 4rem; }
-.card-body { padding: 1.5rem; flex-grow: 1; display: flex; flex-direction: column; }
-.card-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem; }
-.sku { font-size: 0.75rem; color: #a0aec0; letter-spacing: 0.05em; }
-.description { color: #718096; font-size: 0.95rem; line-height: 1.5; margin-bottom: 1.5rem; flex-grow: 1; }
-.card-footer { margin-top: auto; }
-.price-stock { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-.price { font-size: 1.5rem; font-weight: bold; color: #2c3e50; }
-.stock-badge { padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.85rem; font-weight: 600; }
-.stock-badge.good { background: #def7ec; color: #03543f; }
-.stock-badge.low { background: #fde8e8; color: #9b1c1c; }
+.create-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 15px rgba(243, 156, 18, 0.3);
+}
 
-/* BOTONES DE ACCIÓN */
-.buy-btn { width: 100%; padding: 0.875rem; background-color: #42b883; color: white; border: none; border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer; }
-.buy-btn:hover { background-color: #3aa876; }
+/* ---- Error / No Results ---- */
+.error-banner {
+  background: rgba(255, 118, 117, 0.1);
+  border: 1px solid rgba(255, 118, 117, 0.2);
+  color: var(--color-danger);
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  text-align: center;
+}
 
-.admin-actions { display: flex; gap: 10px; }
-.action-btn { flex: 1; padding: 0.8rem; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; color: white; }
-.action-btn.edit { background-color: #3498db; }
-.action-btn.edit:hover { background-color: #2980b9; }
-.action-btn.delete { background-color: #e74c3c; }
-.action-btn.delete:hover { background-color: #c0392b; }
+.no-results {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* ---- Product Grid ---- */
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+/* ---- Product Card ---- */
+.product-card {
+  background: var(--bg-glass);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: all var(--transition-normal);
+  display: flex;
+  flex-direction: column;
+  animation: fadeInUp 0.5s ease backwards;
+}
+
+.product-card:hover {
+  transform: translateY(-6px);
+  border-color: var(--border-color-hover);
+  box-shadow: var(--shadow-md), 0 0 30px rgba(108, 92, 231, 0.08);
+}
+
+.card-image {
+  height: 140px;
+  position: relative;
+  overflow: hidden;
+}
+
+.card-image-pattern {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(108, 92, 231, 0.15) 0%, rgba(0, 206, 201, 0.1) 100%);
+}
+
+.card-sku-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+}
+
+.card-body {
+  padding: 1.5rem;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.card-body h3 {
+  color: var(--text-primary);
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 0.4rem;
+}
+
+.description {
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  line-height: 1.5;
+  margin-bottom: 1.2rem;
+  flex-grow: 1;
+}
+
+.card-footer {
+  margin-top: auto;
+}
+
+.price-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.price {
+  font-size: 1.4rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--color-primary-light), var(--color-accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.stock-badge {
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.stock-badge.good {
+  background: rgba(0, 184, 148, 0.15);
+  color: var(--color-success);
+}
+
+.stock-badge.low {
+  background: rgba(255, 118, 117, 0.15);
+  color: var(--color-danger);
+}
+
+.stock-badge.out {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+}
+
+/* ---- Buy Button ---- */
+.buy-btn {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, var(--color-primary), #8b7cf7);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.buy-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-glow-primary);
+}
+
+.buy-btn:disabled {
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  border: 1px solid var(--border-color);
+}
+
+/* ---- Admin Actions ---- */
+.admin-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.action-btn {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all var(--transition-normal);
+}
+
+.action-btn.edit {
+  background: rgba(52, 152, 219, 0.15);
+  color: #3498db;
+  border: 1px solid rgba(52, 152, 219, 0.2);
+}
+
+.action-btn.edit:hover {
+  background: rgba(52, 152, 219, 0.25);
+}
+
+.action-btn.delete {
+  background: rgba(255, 118, 117, 0.15);
+  color: var(--color-danger);
+  border: 1px solid rgba(255, 118, 117, 0.2);
+}
+
+.action-btn.delete:hover {
+  background: rgba(255, 118, 117, 0.25);
+}
+
+/* ---- Toast ---- */
+.toast {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 9999;
+  padding: 14px 24px;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-md);
+}
+
+.toast.success {
+  background: rgba(0, 184, 148, 0.15);
+  border: 1px solid rgba(0, 184, 148, 0.3);
+  color: var(--color-success);
+}
+
+.toast.error {
+  background: rgba(255, 118, 117, 0.15);
+  border: 1px solid rgba(255, 118, 117, 0.3);
+  color: var(--color-danger);
+}
+
+.toast-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.toast.success .toast-icon { background: rgba(0, 184, 148, 0.2); }
+.toast.error .toast-icon { background: rgba(255, 118, 117, 0.2); }
+
+.toast-enter-active { animation: toastIn 0.3s ease; }
+.toast-leave-active { animation: toastIn 0.3s ease reverse; }
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 </style>

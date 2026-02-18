@@ -1,15 +1,50 @@
-/* Reset básico */
+/* ============================================
+   LibnamicShop — Design System v2.0
+   Premium Dark Theme with Glassmorphism
+   ============================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
 :root {
-  --primary-color: #42b883;
-  --text-color: #2c3e50;
-}
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  font-weight: normal;
-}
-body {
-  min-height: 100vh;
-  font-family: 'Segoe UI', sans-serif;
-  background: #f4f6f8; /* Gris suave profesional */
+  /* ---- Colors ---- */
+  --bg-primary: #0a0a14;
+  --bg-secondary: #12121e;
+  --bg-surface: rgba(255, 255, 255, 0.04);
+  --bg-surface-hover: rgba(255, 255, 255, 0.08);
+  --bg-glass: rgba(255, 255, 255, 0.06);
+
+  --color-primary: #6c5ce7;
+  --color-primary-light: #a29bfe;
+  --color-primary-glow: rgba(108, 92, 231, 0.3);
+  --color-accent: #00cec9;
+  --color-accent-glow: rgba(0, 206, 201, 0.3);
+  --color-success: #00b894;
+  --color-warning: #fdcb6e;
+  --color-danger: #ff7675;
+
+  --text-primary: #f0f0f5;
+  --text-secondary: rgba(255, 255, 255, 0.55);
+  --text-muted: rgba(255, 255, 255, 0.3);
+
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-color-hover: rgba(255, 255, 255, 0.15);
+
+  /* ---- Spacing ---- */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 999px;
+
+  /* ---- Shadows ---- */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
+  --shadow-glow-primary: 0 0 20px var(--color-primary-glow);
+  --shadow-glow-accent: 0 0 20px var(--color-accent-glow);
+
+  /* ---- Transitions ---- */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.3s ease;
+  --transition-slow: 0.5s ease;
 }
