@@ -297,7 +297,7 @@ onUnmounted(() => {
   padding: 14px 20px;
   cursor: pointer;
   transition: background var(--transition-fast);
-  border-bottom: 1px solid rgba(255,255,255,0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
 }
 
 .room-item:hover {
