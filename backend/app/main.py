@@ -31,14 +31,14 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     try:
         # Decodificamos el token
         payload = jwt.decode(token, security.SECRET_KEY, algorithms=[security.ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
+        email: str = payload.get("sub") # Ahora el token guarda el email
+        if email is None:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
     
     # Buscamos al usuario en la DB
-    user = db.query(models.User).filter(models.User.username == username).first()
+    user = crud.get_user_by_email(db, email=email) # Buscamos por email
     if user is None:
         raise credentials_exception
     return user
@@ -55,21 +55,26 @@ def get_current_admin(current_user: models.User = Depends(get_current_user)):
 # --- LOGIN (Token) ---
 @app.post("/token")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(database.get_db)):
-    user = db.query(models.User).filter(models.User.username == form_data.username).first()
+    # TRUCO: form_data.username contiene el EMAIL que envía el frontend
+    user = crud.get_user_by_email(db, email=form_data.username)
+    
+    # Verificamos si el usuario existe Y si la contraseña coincide
     if not user or user.hashed_password != form_data.password:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Usuario o contraseña incorrectos",
+            detail="Email o contraseña incorrectos",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    access_token = security.create_access_token(data={"sub": user.username})
     
-    # Devolvemos también el rol y el usuario
+    # Creamos el token usando el email como identificador
+    access_token = security.create_access_token(data={"sub": user.email})
+    
     return {
         "access_token": access_token, 
         "token_type": "bearer",
-        "username": user.username,
-        "role": user.role
+        "email": user.email,
+        "role": user.role,
+        "full_name": f"{user.first_name} {user.last_name}" # Devolvemos el nombre completo
     }
 
 # --- RUTA PROTEGIDA DE PRUEBA ---
@@ -153,13 +158,29 @@ def read_my_orders(
 # Endpoint para crear un usuario de prueba en la base de datos
 @app.post("/register", response_model=schemas.User)
 def register(user: schemas.UserCreate, db: Session = Depends(database.get_db)):
-    # Guardamos la contraseña tal cual para probar rápido
-    db_user = models.User(
-        username=user.username, 
-        email=user.email, 
-        hashed_password=user.password # <--- Sin encriptar solo por ahora
-    )
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    return db_user
+    # 1. Verificar si el email ya existe
+    db_user = crud.get_user_by_email(db, email=user.email)
+    if db_user:
+        raise HTTPException(status_code=400, detail="El email ya está registrado")
+    
+    # 2. Crear el usuario usando la función del CRUD (que maneja nombre, telefono, etc.)
+    return crud.create_user(db=db, user=user)
+
+# Endpoints de exclusividad para el admin
+# Endpoint para ver TODOS los pedidos
+@app.get("/admin/orders", response_model=list[schemas.OrderResponse])
+def read_all_orders(
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_admin) # <--- Candado Admin
+):
+    return crud.get_all_orders(db)
+
+# Endpoint para cambiar estado
+@app.patch("/orders/{order_id}/status")
+def change_order_status(
+    order_id: int,
+    status: str, # Recibiremos el string query param (Ej: ?status=ENVIADO)
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_admin)
+):
+    return crud.update_order_status(db, order_id, new_status=status)

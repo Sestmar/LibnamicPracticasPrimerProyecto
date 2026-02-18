@@ -1,3 +1,4 @@
+import datetime
 from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -7,11 +8,15 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True)
+    # ELIMINAMOS username. Ahora el email es el identificador único.
     email = Column(String, unique=True, index=True)
-    role = Column(String, default="user")
+    first_name = Column(String)  # Nuevo
+    last_name = Column(String)   # Nuevo
+    phone = Column(String, nullable=True)
     hashed_password = Column(String)
-    is_active = Column(Boolean, default=True)
+    role = Column(String, default="user")
+
+    # items = relationship("Item", back_populates="owner") La clase Item ya no existe, usamos Orders
     orders = relationship("Order", back_populates="owner")
 
 class Product(Base):
@@ -28,11 +33,11 @@ class Order(Base):
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id")) # Relación con Usuario
-    status = Column(String, default="pendiente") # Estado: pendiente, enviado, entregado
-    total_price = Column(Float, default=0.0)
-    created_at = Column(DateTime(timezone=True), server_default=func.now()) # Fecha automática
-
+    user_id = Column(Integer, ForeignKey("users.id"))
+    total_price = Column(Float)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    status = Column(String, default="PENDIENTE")
+    
     # Relaciones
     # Un pedido pertenece a un usuario
     owner = relationship("User", back_populates="orders")
@@ -51,4 +56,4 @@ class OrderItem(Base):
 
     # Relaciones
     order = relationship("Order", back_populates="items")
-    product = relationship("Product") # Para saber qué producto es    
+    product = relationship("Product") # Para saber qué producto es

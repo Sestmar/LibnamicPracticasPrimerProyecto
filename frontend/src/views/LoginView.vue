@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-const username = ref('')
+const email = ref('')
 const password = ref('')
 const router = useRouter()
 const error = ref('')
@@ -13,7 +13,7 @@ const login = async () => {
   isLoading.value = true
   
   const formData = new URLSearchParams()
-  formData.append('username', username.value)
+  formData.append('username', email.value) 
   formData.append('password', password.value)
 
   try {
@@ -27,10 +27,10 @@ const login = async () => {
 
     const data = await response.json()
     
-    // Guardo el token Y el rol y el usuario
+    // Guardo el token Y el rol y el nombre completo
     localStorage.setItem('token', data.access_token)
-    localStorage.setItem('role', data.role)      
-    localStorage.setItem('username', data.username)
+    localStorage.setItem('role', data.role)
+    localStorage.setItem('full_name', data.full_name)
     // -------------------------
 
     router.push('/products')
@@ -54,11 +54,11 @@ const login = async () => {
 
       <form @submit.prevent="login" class="login-form">
         <div class="form-group">
-          <label>Usuario</label>
+          <label>Correo Electrónico</label>
           <input 
-            v-model="username" 
+            v-model="email" 
             type="text" 
-            placeholder="Ej: pepe" 
+            placeholder="example@example.com" 
             required 
             :disabled="isLoading"
           />

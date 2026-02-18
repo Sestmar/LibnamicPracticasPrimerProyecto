@@ -18,10 +18,12 @@ class Product(ProductBase):
     class Config:
         from_attributes = True
 
-# --- USUARIOS (No implementada aún) ---
+# --- USUARIOS ---
 class UserBase(BaseModel):
-    username: str
     email: str
+    first_name: str  # Nuevo
+    last_name: str   # Nuevo
+    phone: str | None = None
     role: str = "user"
 
 class UserCreate(UserBase):
@@ -29,10 +31,12 @@ class UserCreate(UserBase):
 
 class User(UserBase):
     id: int
-    is_active: bool
-
+    is_active: bool = True
+    
     class Config:
         from_attributes = True
+
+# --- SCHEMAS PARA CREAR PEDIDOS (Input) ---
 
 # Lo que recibimos del cliente (solo id y cantidad)
 class OrderItemCreate(BaseModel):
@@ -43,9 +47,10 @@ class OrderItemCreate(BaseModel):
 class OrderCreate(BaseModel):
     items: list[OrderItemCreate]
 
+
 # --- SCHEMAS PARA RESPUESTAS (LEER PEDIDOS) ---
 
-# Detalle del item dentro del pedido (incluye nombre del producto)
+# 1. Detalle del item dentro del pedido (Response)
 class OrderItemResponse(BaseModel):
     product_id: int
     quantity: int
@@ -54,14 +59,26 @@ class OrderItemResponse(BaseModel):
     class Config:
         from_attributes = True
 
-# El pedido completo con todos sus datos
+# 2. Esquema pequeñito para mostrar datos del dueño del pedido
+class UserInOrder(BaseModel):
+    email: str
+    first_name: str
+    last_name: str
+    phone: str | None = None
+    
+    class Config:
+        from_attributes = True
+
+# 3. El pedido completo con todos sus datos
 class OrderResponse(BaseModel):
     id: int
-    user_id: int
-    status: str
-    total_price: float
     created_at: datetime
-    items: list[OrderItemResponse] # Lista anidada
+    total_price: float
+    status: str
+    items: list[OrderItemResponse] = []
+    
+    # Aquí incrustamos al usuario
+    owner: UserInOrder 
 
     class Config:
-        from_attributes = True        
+        from_attributes = True

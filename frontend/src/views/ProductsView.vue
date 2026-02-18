@@ -98,27 +98,36 @@ const cancelEdit = () => {
   newProduct.value = { name: '', description: '', price: 0, stock: 0, sku: '' }
 }
 
-const buyProduct = async (productId) => {
-  try {
-    const response = await fetch('http://localhost:8000/orders/', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ items: [{ product_id: productId, quantity: 1 }] })
-    })
-
-    if (response.ok) {
-      alert('✅ Pedido realizado')
-      fetchProducts()
+// --- FUNCIÓN CARRITO ---
+const addToCart = (product) => {
+  // 1. Recuperamos el carrito actual (o creamos uno vacío)
+  let cart = JSON.parse(localStorage.getItem('shopping_cart') || '[]')
+  
+  // 2. Busco si el producto ya estaba para sumar cantidad
+  const existingItem = cart.find(item => item.id === product.id)
+  
+  if (existingItem) {
+    if (existingItem.quantity < product.stock) {
+      existingItem.quantity++
     } else {
-      const err = await response.json()
-      alert('❌ Error: ' + err.detail)
+      alert('¡No hay más stock disponible!')
+      return
     }
-  } catch (e) {
-    console.error(e)
+  } else {
+    // Si es nuevo, lo añado con cantidad 1
+    // Guardo solo lo necesario: id, nombre, precio
+    cart.push({
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      quantity: 1,
+      stock: product.stock // Para validar stock en el carrito
+    })
   }
+
+  // 3. Guardamos en LocalStorage
+  localStorage.setItem('shopping_cart', JSON.stringify(cart))
+  alert('🛒 Producto añadido al carrito')
 }
 
 const logout = () => {
@@ -137,8 +146,27 @@ onMounted(fetchProducts)
       <div class="nav-content">
         <div class="logo">LibnamicShop</div>
         <div class="nav-actions">
-          <button @click="router.push('/my-orders')" class="nav-btn secondary">Mis Pedidos</button>
-          <button @click="logout" class="nav-btn danger">Salir</button>
+          <button @click="router.push('/my-orders')" class="nav-btn secondary">
+            Mis Pedidos
+          </button>
+          
+          <button 
+            v-if="userRole === 'admin'" 
+            @click="router.push('/admin')" 
+            class="nav-btn settings-btn">
+            Ajustes
+          </button>
+
+          <button 
+            v-else 
+            @click="router.push('/cart')" 
+            class="nav-btn cart-btn">
+            🛒 Carrito
+          </button>
+
+          <button @click="logout" class="nav-btn danger">
+            Salir
+          </button>
         </div>
       </div>
     </nav>
@@ -214,10 +242,10 @@ onMounted(fetchProducts)
               
               <button 
                 v-if="userRole !== 'admin'" 
-                @click="buyProduct(product.id)" 
+                @click="addToCart(product)" 
                 :disabled="product.stock === 0"
                 class="buy-btn">
-                {{ product.stock > 0 ? 'Añadir al Carrito' : 'Agotado' }}
+                {{ product.stock > 0 ? '🛒 Añadir al Carrito' : 'Agotado' }}
               </button>
 
               <div v-else class="admin-actions">
