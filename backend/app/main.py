@@ -91,7 +91,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 # --- RUTA PROTEGIDA DE PRUEBA ---
 @app.get("/users/me")
 def read_users_me(current_user: models.User = Depends(get_current_user)):
-    return {"mensaje": "¡Has entrado en la zona segura!", "usuario": current_user.username, "rol": current_user.role}
+    return {"mensaje": "¡Has entrado en la zona segura!", "usuario": current_user.email, "rol": current_user.role}
 
 # --- PASARELA DE PAGO ---
 
