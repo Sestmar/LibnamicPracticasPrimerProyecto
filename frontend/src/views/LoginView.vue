@@ -8,6 +8,9 @@ const router = useRouter()
 const error = ref('')
 const isLoading = ref(false)
 
+// 1. AÑADIMOS LA VARIABLE DE ENTORNO
+const apiUrl = import.meta.env.VITE_API_URL
+
 const login = async () => {
   error.value = ''
   isLoading.value = true
@@ -17,7 +20,8 @@ const login = async () => {
   formData.append('password', password.value)
 
   try {
-    const response = await fetch('http://localhost:8000/token', {
+    // 2. Apuntamos a la variable de render
+    const response = await fetch(`${apiUrl}/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: formData
