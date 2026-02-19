@@ -570,9 +570,15 @@ El esquema se gestiona con **Alembic**, permitiendo evolucionar las tablas sin p
 Una demostración completa del funcionamiento de la aplicación:
 
 <div align="center">
-  <video src="https://github.com/Sestmar/LibnamicPracticasPrimerProyecto/raw/v2-advanced/frontend/demoproyectolibnamic.mp4" width="100%" controls>
-    Tu navegador no admite el elemento de video.
-  </video>
+
+<!-- 
+  Para que el video se reproduzca inline, sube el .mp4 a un Issue de GitHub
+  y reemplaza la URL del src con la que GitHub genera (user-attachments).
+  Ejemplo: <video src="https://github.com/user-attachments/assets/XXXXX" width="100%" controls></video>
+-->
+
+[![Ver Video Demo](https://img.shields.io/badge/%E2%96%B6%EF%B8%8F_Ver_Video_Demo-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://github.com/Sestmar/LibnamicPracticasPrimerProyecto/raw/v2-advanced/frontend/demoproyectolibnamic.mp4)
+
 </div>
 
 > El video muestra el flujo completo: registro, login, navegación por el catálogo, compra con pago Stripe, historial de pedidos, panel administrativo con gráficas y chat en tiempo real.
