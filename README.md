@@ -571,13 +571,9 @@ Una demostración completa del funcionamiento de la aplicación:
 
 <div align="center">
 
-<!-- 
-  Para que el video se reproduzca inline, sube el .mp4 a un Issue de GitHub
-  y reemplaza la URL del src con la que GitHub genera (user-attachments).
-  Ejemplo: <video src="https://github.com/user-attachments/assets/XXXXX" width="100%" controls></video>
--->
+[![Ver Video Demo](https://img.youtube.com/vi/U6WX4dgNCg4/maxresdefault.jpg)](https://youtu.be/U6WX4dgNCg4)
 
-[![Ver Video Demo](https://img.shields.io/badge/%E2%96%B6%EF%B8%8F_Ver_Video_Demo-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://github.com/Sestmar/LibnamicPracticasPrimerProyecto/raw/v2-advanced/frontend/demoproyectolibnamic.mp4)
+*▶️ Haz clic en la imagen para ver la demo completa en YouTube*
 
 </div>
 
