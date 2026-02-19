@@ -62,7 +62,7 @@ def get_current_admin(current_user: models.User = Depends(get_current_user)):
     return current_user
 
 # --- LOGIN (Token) ---
-@app.post("/token")
+@app.post("/token", tags=["Autenticación"])
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(database.get_db)):
     user = crud.get_user_by_email(db, email=form_data.username)
     
@@ -89,13 +89,21 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     }
 
 # --- RUTA PROTEGIDA DE PRUEBA ---
-@app.get("/users/me")
+@app.get("/users/me", tags=["Usuarios"])
 def read_users_me(current_user: models.User = Depends(get_current_user)):
     return {"mensaje": "¡Has entrado en la zona segura!", "usuario": current_user.email, "rol": current_user.role}
 
+@app.get("/users/", tags=["Usuarios"])
+def read_all_users(db: Session = Depends(database.get_db)):
+    
+    # Devuelvo la lista completa de todos los usuarios registrados en la base de datos.
+    
+    usuarios = db.query(models.User).all()
+    return usuarios
+
 # --- PASARELA DE PAGO ---
 
-@app.post("/create-payment-intent")
+@app.post("/create-payment-intent", tags=["Pasarela de Pago"])
 def create_payment_intent(
     order: schemas.OrderCreate, 
     db: Session = Depends(database.get_db),
@@ -119,7 +127,7 @@ def create_payment_intent(
         
         total_amount += product.price * item.quantity
 
-    # 2. Stripe trabaja en CÉNTIMOS (enteros), no en decimales.
+    # 2. Stripe trabaja en céntimos, no en decimales.
     # Ejemplo: 20.50€ -> 2050 céntimos
     amount_in_cents = int(total_amount * 100)
 
@@ -129,7 +137,7 @@ def create_payment_intent(
             amount=amount_in_cents,
             currency="eur",
             automatic_payment_methods={"enabled": True}, # Permite tarjetas, Google Pay, etc.
-            metadata={"user_email": current_user.email} # Guardamos info extra
+            metadata={"user_email": current_user.email} # Guardo info extra
         )
 
         return {"clientSecret": intent.client_secret}
@@ -139,7 +147,7 @@ def create_payment_intent(
 
 # --- ENDPOINTS DE PRODUCTOS (INVENTARIO) ---
 
-@app.post("/products/", response_model=schemas.Product)
+@app.post("/products/", response_model=schemas.Product, tags=["Productos"])
 def create_product(
     product: schemas.ProductCreate, 
     db: Session = Depends(database.get_db),
@@ -153,7 +161,7 @@ def create_product(
     return crud.create_product(db=db, product=product)
 
 # BORRAR PRODUCTO (Solo Admin)
-@app.delete("/products/{product_id}")
+@app.delete("/products/{product_id}", tags=["Productos"])
 def delete_product(
     product_id: int, 
     db: Session = Depends(database.get_db),
@@ -166,7 +174,7 @@ def delete_product(
     return {"detail": "Producto eliminado"}
 
 # ACTUALIZAR PRODUCTO (Solo Admin)
-@app.put("/products/{product_id}", response_model=schemas.Product)
+@app.put("/products/{product_id}", response_model=schemas.Product, tags=["Productos"])
 def update_product(
     product_id: int,
     product_data: schemas.ProductCreate,
@@ -178,11 +186,11 @@ def update_product(
         raise HTTPException(status_code=404, detail="Producto no encontrado")
     return crud.update_product(db, product_id, product_data)
 
-@app.get("/products/", response_model=list[schemas.Product])
+@app.get("/products/", response_model=list[schemas.Product], tags=["Productos"])
 def read_products(skip: int = 0, limit: int = 100, db: Session = Depends(database.get_db)):
     return crud.get_products(db, skip=skip, limit=limit)
 
-@app.get("/products/{product_id}", response_model=schemas.Product)
+@app.get("/products/{product_id}", response_model=schemas.Product, tags=["Productos"])
 def read_product(product_id: int, db: Session = Depends(database.get_db)):
     db_product = crud.get_product(db, product_id=product_id)
     if db_product is None:
@@ -191,8 +199,7 @@ def read_product(product_id: int, db: Session = Depends(database.get_db)):
 
 
 # --- ENDPOINTS DE PEDIDOS ---
-
-@app.post("/orders/", response_model=schemas.OrderResponse)
+@app.post("/orders/", response_model=schemas.OrderResponse, tags=["Pedidos"])
 def create_order(
     order: schemas.OrderCreate, 
     db: Session = Depends(database.get_db),
@@ -210,7 +217,7 @@ def create_order(
     
     return new_order
 
-@app.get("/orders/my-orders", response_model=list[schemas.OrderResponse])
+@app.get("/orders/my-orders", response_model=list[schemas.OrderResponse], tags=["Pedidos"])
 def read_my_orders(
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(get_current_user)
@@ -219,7 +226,7 @@ def read_my_orders(
     return crud.get_orders_by_user(db, user_id=current_user.id)
 
 # Endpoint para crear un usuario de prueba en la base de datos
-@app.post("/register", response_model=schemas.User)
+@app.post("/register", response_model=schemas.User, tags=["Usuarios"])
 def register(user: schemas.UserCreate, db: Session = Depends(database.get_db)):
     # 1. Verificar si el email ya existe
     db_user = crud.get_user_by_email(db, email=user.email)
@@ -231,7 +238,7 @@ def register(user: schemas.UserCreate, db: Session = Depends(database.get_db)):
 
 # Endpoints de exclusividad para el admin
 # Endpoint para ver TODOS los pedidos
-@app.get("/admin/orders", response_model=list[schemas.OrderResponse])
+@app.get("/admin/orders", response_model=list[schemas.OrderResponse], tags=["Pedidos"])
 def read_all_orders(
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(get_current_admin) # <--- Candado Admin
@@ -239,7 +246,7 @@ def read_all_orders(
     return crud.get_all_orders(db)
 
 # Endpoint para cambiar estado
-@app.patch("/orders/{order_id}/status")
+@app.patch("/orders/{order_id}/status", tags=["Pedidos"])
 def change_order_status(
     order_id: int,
     status: str, # Recibiremos el string query param (Ej: ?status=ENVIADO)
@@ -249,7 +256,7 @@ def change_order_status(
     return crud.update_order_status(db, order_id, new_status=status)
 
 # Endpoint de estadísticas para el Dashboard BI
-@app.get("/admin/stats")
+@app.get("/admin/stats", tags=["Estadisticas"])
 def read_dashboard_stats(
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(get_current_admin)
@@ -257,7 +264,7 @@ def read_dashboard_stats(
     return crud.get_dashboard_stats(db)
 
 # Endpoint para descargar la factura en PDF
-@app.get("/orders/{order_id}/invoice")
+@app.get("/orders/{order_id}/invoice", tags=["Descargar Factura"])
 def download_invoice(
     order_id: int,
     db: Session = Depends(database.get_db),
@@ -336,6 +343,6 @@ async def websocket_chat(websocket: WebSocket, room_id: str):
             "timestamp": datetime.utcnow().isoformat()
         })
 
-@app.get("/admin/chat-rooms")
+@app.get("/admin/chat-rooms", tags=["Chat"])
 def get_chat_rooms(current_user: models.User = Depends(get_current_admin)):
     return chat_manager.get_active_rooms()
