@@ -569,7 +569,7 @@ El esquema se gestiona con **Alembic**, permitiendo evolucionar las tablas sin p
 
 Una demostración completa del funcionamiento de la aplicación está disponible en el repositorio:
 
-https://github.com/SestmarSEAT/LibnamicPracticasPrimerProyecto/raw/main/frontend/demoproyectolibnamic.mp4
+https://github.com/Sestmar/LibnamicPracticasPrimerProyecto/raw/main/frontend/demoproyectolibnamic.mp4
 
 > El video muestra el flujo completo: registro, login, navegación por el catálogo, compra con pago Stripe, historial de pedidos, panel administrativo con gráficas y chat en tiempo real.
 
